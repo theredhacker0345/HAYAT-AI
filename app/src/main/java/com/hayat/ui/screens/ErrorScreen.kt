@@ -1,5 +1,7 @@
 package com.hayat.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -17,6 +20,12 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun ErrorScreen(missingPath: String) {
+    val context = LocalContext.current
+    val hayatFolder = "/sdcard/Hayat/"
+    val modelFile = "$hayatFolder/model.gguf"
+    val embeddingFile = "$hayatFolder/e5-small.onnx"
+    val dbFile = "$hayatFolder/medical.db"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -53,7 +62,7 @@ fun ErrorScreen(missingPath: String) {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = missingPath,
+                    text = "المجلد: $hayatFolder",
                     color = Color.Yellow,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
@@ -74,7 +83,27 @@ fun ErrorScreen(missingPath: String) {
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 14.sp
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "حجم الملفات قد يختلف حسب الإصدار. تأكد من تحميل النماذج المناسبة من الروابط في دليل الإعداد.",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    fontSize = 12.sp
+                )
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = { openSetupGuide(context) },
+            modifier = Modifier.fillMaxWidth(0.8f)
+        ) {
+            Text("فتح دليل الإعداد")
+        }
     }
+}
+
+private fun openSetupGuide(context: android.content.Context) {
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        data = Uri.parse("https://github.com/HayatAI/offline-medical-assistant#setup")
+    }
+    context.startActivity(intent)
 }

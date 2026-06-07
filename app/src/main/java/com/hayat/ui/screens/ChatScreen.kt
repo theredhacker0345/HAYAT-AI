@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,7 +45,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
             .background(MaterialTheme.colorScheme.background)
     ) {
         if (error != null) {
-            ErrorBanner(error = error ?: "", onDismiss = { viewModel.clearError() })
+            ErrorBanner(error = error ?: "", onRetry = { viewModel.retryLastMessage() })
         }
 
         LazyColumn(
@@ -119,8 +120,8 @@ fun ChatScreen(viewModel: ChatViewModel) {
 fun ChatBubble(message: ChatMessage) {
     val isUser = message.role == ChatRole.USER
     val alignment = if (isUser) Alignment.End else Alignment.Start
-    val bubbleColor = if (isUser) Color(0xFF00D9A3) else MaterialTheme.colorScheme.surface
-    val textColor = if (isUser) Color.Black else MaterialTheme.colorScheme.onSurface
+    val bubbleColor = if (isUser) Color(0xFF00D9A3) else Color(0xFF2A2A2A)
+    val textColor = if (isUser) Color.Black else Color.White
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -136,21 +137,43 @@ fun ChatBubble(message: ChatMessage) {
             )
         ) {
             Column {
+                if (!isUser) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚕️",
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text(
+                            text = "مساعد طبي",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF00D9A3),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
                 Text(
                     text = message.content,
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(
+                        horizontal = 12.dp,
+                        vertical = if (isUser) 12.dp else 0.dp
+                    ),
                     color = textColor,
                     fontSize = 16.sp
                 )
-                if (!isUser && message.contextChunks.isNotEmpty()) {
-                    Text(
-                        text = "مصادر: ${message.contextChunks.joinToString { it.protocol_title }}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF00D9A3),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
             }
+        }
+        if (!isUser && message.contextChunks.isNotEmpty()) {
+            Text(
+                text = "مصادر: ${message.contextChunks.joinToString { it.protocol_title }}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00D9A3),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
         }
     }
 }
@@ -181,18 +204,27 @@ fun LoadingBubble() {
                 bottomEnd = 12.dp
             )
         ) {
-            Text(
-                text = "⚕️ جاري التفكير...",
+            Row(
                 modifier = Modifier.padding(12.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp
-            )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "⚕️",
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    text = "جاري التفكير...",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 16.sp
+                )
+            }
         }
     }
 }
 
 @Composable
-fun ErrorBanner(error: String, onDismiss: () -> Unit) {
+fun ErrorBanner(error: String, onRetry: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         modifier = Modifier
@@ -208,8 +240,8 @@ fun ErrorBanner(error: String, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onDismiss) {
-                Text("إغلاق")
+            TextButton(onClick = onRetry) {
+                Text("إعادة المحاولة")
             }
         }
     }

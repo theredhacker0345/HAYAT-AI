@@ -1,8 +1,6 @@
 package com.hayat.ui.screens
 
-import android.content.Intent
 import android.content.Context
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -12,7 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import java.io.File
+import com.hayat.services.P2PSharingService
 
 @Composable
 fun SettingsScreen(
@@ -67,7 +65,7 @@ fun SettingsScreen(
         )
 
         Button(
-            onClick = { shareApk(context) },
+            onClick = { P2PSharingService.getInstance(context).shareApkSimple() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(
@@ -76,26 +74,7 @@ fun SettingsScreen(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("مشاركة التطبيق عبر Bluetooth/WiFi")
+            Text("مشاركة التطبيق عبر Bluetooth/WiFi Direct")
         }
-    }
-}
-
-private fun shareApk(context: Context) {
-    try {
-        val apkFile = File("/sdcard/Hayat/HayatAI.apk")
-        if (!apkFile.exists()) {
-            return
-        }
-
-        val uri = Uri.fromFile(apkFile)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/vnd.android.package.archive"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "مشاركة التطبيق"))
-    } catch (e: Exception) {
-        // Silently fail - APK may not exist
     }
 }

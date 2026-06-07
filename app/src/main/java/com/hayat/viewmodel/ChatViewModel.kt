@@ -115,4 +115,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun clearError() {
         _error.value = null
     }
+
+    fun retryLastMessage() {
+        val lastUserMessage = _messages.value.reversed().find { it.role == ChatRole.USER }
+        lastUserMessage?.let {
+            // Remove the last assistant message if exists
+            val updatedMessages = _messages.value.filter { msg -> msg.role != ChatRole.ASSISTANT }
+            _messages.value = updatedMessages
+            sendMessage(it.content)
+        }
+    }
 }
