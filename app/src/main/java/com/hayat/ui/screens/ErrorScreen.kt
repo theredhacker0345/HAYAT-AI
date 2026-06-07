@@ -2,6 +2,7 @@ package com.hayat.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -32,29 +33,48 @@ fun ErrorScreen(missingPath: String) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Missing Assets",
+            text = "ملفات مفقودة",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.error,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Please create the following folder and add the required files (model.gguf and medical.db):",
+            text = "يرجى إنشاء المجلد التالي وإضافة الملفات المطلوبة:",
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(16.dp))
         Surface(
             color = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.medium
+            shape = RoundedCornerShape(8.dp)
         ) {
-            Text(
-                text = missingPath,
-                modifier = Modifier.padding(16.dp),
-                color = Color.Yellow,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = missingPath,
+                    color = Color.Yellow,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "• model.gguf (~800MB-1.1GB): طراز الذكاء الاصطناعي للمعالجة الطبية",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "• e5-small.onnx (~100MB): نموذج التضمين للبحث الدلالي",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "• medical.db (~5-10MB): قاعدة البيانات الطبية",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }

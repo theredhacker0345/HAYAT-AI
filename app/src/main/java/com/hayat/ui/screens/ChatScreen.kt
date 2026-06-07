@@ -1,9 +1,14 @@
 package com.hayat.ui.screens
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
@@ -17,33 +22,47 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hayat.data.ChatMessage
 import com.hayat.data.ChatRole
+import com.hayat.viewmodel.ChatViewModel
 
 @Composable
-fun ChatScreen(
-    messages: List<ChatMessage>,
-    onSendMessage: (String) -> Unit
-) {
+fun ChatScreen(viewModel: ChatViewModel) {
+    val messages by viewModel.messages.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
     var textState by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Conversation area
+        if (error != null) {
+            ErrorBanner(error = error ?: "", onDismiss = { viewModel.clearError() })
+        }
+
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            state = listState
         ) {
             items(messages) { message ->
                 ChatBubble(message)
             }
+            if (isLoading && messages.lastOrNull()?.role != ChatRole.ASSISTANT) {
+                item { LoadingBubble() }
+            }
         }
 
-        // Input field area
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -57,7 +76,8 @@ fun ChatScreen(
                     value = textState,
                     onValueChange = { textState = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("اكتب رسالة...") }, // Arabic for "Type a message..."
+                    placeholder = { Text("اكتب رسالة...") },
+                    enabled = !isLoading,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -67,11 +87,12 @@ fun ChatScreen(
                 )
                 IconButton(
                     onClick = {
-                        if (textState.isNotBlank()) {
-                            onSendMessage(textState)
+                        if (textState.isNotBlank() && !isLoading) {
+                            viewModel.sendMessage(textState)
                             textState = ""
                         }
-                    }
+                    },
+                    enabled = !isLoading
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,
@@ -81,7 +102,6 @@ fun ChatScreen(
                 }
             }
 
-            // Disclaimer
             Text(
                 text = "I am an offline medical assistant, ask me about injuries.",
                 style = MaterialTheme.typography.labelSmall,
@@ -99,8 +119,8 @@ fun ChatScreen(
 fun ChatBubble(message: ChatMessage) {
     val isUser = message.role == ChatRole.USER
     val alignment = if (isUser) Alignment.End else Alignment.Start
-    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val bubbleColor = if (isUser) Color(0xFF00D9A3) else MaterialTheme.colorScheme.surface
+    val textColor = if (isUser) Color.Black else MaterialTheme.colorScheme.onSurface
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -115,12 +135,82 @@ fun ChatBubble(message: ChatMessage) {
                 bottomEnd = if (isUser) 0.dp else 12.dp
             )
         ) {
+            Column {
+                Text(
+                    text = message.content,
+                    modifier = Modifier.padding(12.dp),
+                    color = textColor,
+                    fontSize = 16.sp
+                )
+                if (!isUser && message.contextChunks.isNotEmpty()) {
+                    Text(
+                        text = "مصادر: ${message.contextChunks.joinToString { it.protocol_title }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF00D9A3),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LoadingBubble() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = tween(
+            durationMillis = 800,
+            easing = FastOutSlowInEasing
+        )
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = alpha),
+            shape = RoundedCornerShape(
+                topStart = 12.dp,
+                topEnd = 12.dp,
+                bottomStart = 0.dp,
+                bottomEnd = 12.dp
+            )
+        ) {
             Text(
-                text = message.content,
+                text = "⚕️ جاري التفكير...",
                 modifier = Modifier.padding(12.dp),
-                color = textColor,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp
             )
+        }
+    }
+}
+
+@Composable
+fun ErrorBanner(error: String, onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "خطأ: $error",
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق")
+            }
         }
     }
 }

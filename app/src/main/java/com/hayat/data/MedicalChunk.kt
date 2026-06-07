@@ -11,7 +11,7 @@ data class MedicalChunk(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val protocol_title: String,
     val content: String,
-    val embedding: FloatArray
+    val embedding: FloatArray? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -20,6 +20,8 @@ data class MedicalChunk(
         if (id != other.id) return false
         if (protocol_title != other.protocol_title) return false
         if (content != other.content) return false
+        if (embedding == null && other.embedding == null) return true
+        if (embedding == null || other.embedding == null) return false
         if (!embedding.contentEquals(other.embedding)) return false
         return true
     }
@@ -28,7 +30,7 @@ data class MedicalChunk(
         var result = id.hashCode()
         result = 31 * result + protocol_title.hashCode()
         result = 31 * result + content.hashCode()
-        result = 31 * result + embedding.contentHashCode()
+        result = 31 * result + (embedding?.contentHashCode() ?: 0)
         return result
     }
 }
