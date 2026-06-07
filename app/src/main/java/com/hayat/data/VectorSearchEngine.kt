@@ -4,11 +4,11 @@ import kotlin.math.sqrt
 
 class VectorSearchEngine(private val dao: MedicalChunkDao) {
 
-    /**
-     * Performs a Cosine Similarity calculation between the queryEmbedding
-     * and all embedding arrays in the database.
-     */
-    suspend fun findRelevantChunks(queryEmbedding: FloatArray): List<MedicalChunk> {
+    private val TOP_K_LIMIT = 5
+
+    suspend fun findRelevantChunks(queryEmbedding: FloatArray?): List<MedicalChunk> {
+        if (queryEmbedding == null) return emptyList()
+        
         val allChunks = dao.getAllChunks()
         return allChunks
             .map { chunk ->
@@ -21,26 +21,22 @@ class VectorSearchEngine(private val dao: MedicalChunkDao) {
             .sortedByDescending { (_, score) ->
                 score
             }
+            .take(TOP_K_LIMIT)
             .map { (chunk, _) ->
                 chunk
             }
     }
 
-    /**
-     * Returns true only if score > 0.82.
-     */
     fun isResultValid(score: Float): Boolean {
         return score > 0.82f
     }
 
-    /**
-     * Refusal message to be shown if no valid results are found.
-     */
     fun getRefusalMessage(): String {
-        return "I'm sorry, but I couldn't find any relevant medical protocols to answer your request reliably."
+        return "نأسف، لكننا لم نتمكن من العثور على بروتوكولات طبية ذات صلة للإجابة على طلبك بثقة."
     }
 
-    private fun calculateCosineSimilarity(vectorA: FloatArray, vectorB: FloatArray): Float {
+    private fun calculateCosineSimilarity(vectorA: FloatArray, vectorB: FloatArray?): Float {
+        if (vectorB == null) return 0f
         if (vectorA.size != vectorB.size) return 0f
 
         var dotProduct = 0.0

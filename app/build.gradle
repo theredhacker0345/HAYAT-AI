@@ -65,6 +65,9 @@ dependencies {
     // ONNX Runtime for Android
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.1'
 
+    // llama-android: GGUF inference via llama.cpp (lljcamargo fork)
+    implementation 'io.github.ljcamargo:llamacpp-kotlin:0.4.0'
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

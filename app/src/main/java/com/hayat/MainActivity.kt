@@ -14,31 +14,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.hayat.data.ChatMessage
-import com.hayat.data.ChatRole
 import com.hayat.ui.screens.ChatScreen
 import com.hayat.ui.screens.ErrorScreen
 import com.hayat.ui.screens.SettingsScreen
 import com.hayat.ui.theme.HayatTheme
+import com.hayat.viewmodel.ChatViewModel
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+    private lateinit var chatViewModel: ChatViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        chatViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+
         setContent {
-            HayatApp()
+            HayatApp(chatViewModel)
         }
     }
 }
 
 @Composable
-fun HayatApp() {
+fun HayatApp(viewModel: ChatViewModel) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Chat) }
     var assetsMissing by remember { mutableStateOf(false) }
     val hayatFolder = File(Environment.getExternalStorageDirectory(), "Hayat")
 
-    // Check for assets on startup
     LaunchedEffect(Unit) {
         val modelFile = File(hayatFolder, "model.gguf")
         val embeddingModelFile = File(hayatFolder, "e5-small.onnx")
@@ -46,12 +48,10 @@ fun HayatApp() {
 
         if (!hayatFolder.exists() || !modelFile.exists() || !embeddingModelFile.exists() || !dbFile.exists()) {
             assetsMissing = true
+        } else {
+            viewModel.loadModel()
         }
     }
-
-    val messages = remember { mutableStateListOf<ChatMessage>() }
-    var modelPath by remember { mutableStateOf(File(hayatFolder, "model.gguf").absolutePath) }
-    var dbPath by remember { mutableStateOf(File(hayatFolder, "medical.db").absolutePath) }
 
     HayatTheme {
         Surface(
@@ -63,26 +63,16 @@ fun HayatApp() {
             } else {
                 Box {
                     when (currentScreen) {
-                        Screen.Chat -> ChatScreen(
-                            messages = messages,
-                            onSendMessage = { text ->
-                                messages.add(ChatMessage(text, ChatRole.USER))
-                                // Placeholder for AI response
-                                messages.add(ChatMessage("Checking medical guidelines for: $text", ChatRole.ASSISTANT))
-                            }
-                        )
+                        Screen.Chat -> ChatScreen(viewModel = viewModel)
                         Screen.Settings -> SettingsScreen(
-                            modelPath = modelPath,
-                            dbPath = dbPath,
-                            onPathsChanged = { newModel, newDb ->
-                                modelPath = newModel
-                                dbPath = newDb
+                            modelPath = ModelInferenceService.DEFAULT_MODEL_PATH,
+                            dbPath = "/sdcard/Hayat/medical.db",
+                            onPathsChanged = { _, _ ->
                                 currentScreen = Screen.Chat
                             }
                         )
                     }
 
-                    // Simple floating button to switch screens for demonstration
                     FloatingActionButton(
                         onClick = {
                             currentScreen = if (currentScreen == Screen.Chat) Screen.Settings else Screen.Chat
