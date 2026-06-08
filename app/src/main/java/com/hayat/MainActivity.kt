@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import com.hayat.ui.screens.ChatScreen
 import com.hayat.ui.screens.ErrorScreen
 import com.hayat.ui.screens.SettingsScreen
@@ -27,7 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        chatViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+        chatViewModel = ViewModelProvider(this)[ChatViewModel::class.java]
 
         setContent {
             HayatApp(chatViewModel)

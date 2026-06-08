@@ -2,10 +2,8 @@ package com.hayat.data
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MedicalDatabaseSeeder(private val context: Context) {
     private val TAG = "MedicalDatabaseSeeder"
@@ -113,26 +111,27 @@ class MedicalDatabaseSeeder(private val context: Context) {
         )
     )
 
-    @OptIn(DelicateCoroutinesApi::class)
-    fun seedDatabaseIfNeeded() {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val db = AppDatabase.getDatabase(context)
-                val dao = db.medicalChunkDao()
+    suspend fun seedDatabaseIfNeeded() {
+        try {
+            val db = AppDatabase.getDatabase(context)
+            val dao = db.medicalChunkDao()
 
-                val existingChunks = dao.getAllChunks()
-                if (existingChunks.isEmpty()) {
-                    Log.d(TAG, "Seeding database with ${emergencyProtocols.size} emergency protocols")
+            val existingChunks = withContext(Dispatchers.IO) {
+                dao.getAllChunks()
+            }
+            if (existingChunks.isEmpty()) {
+                Log.d(TAG, "Seeding database with ${emergencyProtocols.size} emergency protocols")
+                withContext(Dispatchers.IO) {
                     emergencyProtocols.forEach { chunk ->
                         dao.insertChunk(chunk)
                     }
-                    Log.d(TAG, "Database seeding complete")
-                } else {
-                    Log.d(TAG, "Database already has ${existingChunks.size} chunks, skipping seed")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to seed database", e)
+                Log.d(TAG, "Database seeding complete")
+            } else {
+                Log.d(TAG, "Database already has ${existingChunks.size} chunks, skipping seed")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to seed database", e)
         }
     }
 }

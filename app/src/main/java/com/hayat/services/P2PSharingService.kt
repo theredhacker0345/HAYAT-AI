@@ -2,6 +2,7 @@ package com.hayat.services
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
@@ -29,16 +30,35 @@ class P2PSharingService private constructor(private val context: Context) {
                 hayatFolder.mkdirs()
             }
 
-            // In production, this would export the actual APK from the installed package
-            // For now, we create an empty file as a placeholder
             val apkFile = File(APK_OUTPUT_PATH)
-            if (!apkFile.exists()) {
-                apkFile.createNewFile()
+            
+            // Get the actual APK path from installed package
+            val apkPath = getInstalledApkPath()
+            if (apkPath != null) {
+                java.io.FileInputStream(apkPath).use { input ->
+                    java.io.FileOutputStream(apkFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } else {
+                Log.w("P2PSharingService", "Could not find installed APK path, skipping export")
+                return false
             }
             true
         } catch (e: Exception) {
             Log.e("P2PSharingService", "Failed to export APK", e)
             false
+        }
+    }
+    
+    private fun getInstalledApkPath(): String? {
+        return try {
+            val packageName = context.packageName
+            val packageInfo = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SOURCE_DIR)
+            packageInfo.applicationInfo.sourceDir
+        } catch (e: Exception) {
+            Log.e("P2PSharingService", "Failed to get APK path", e)
+            null
         }
     }
 

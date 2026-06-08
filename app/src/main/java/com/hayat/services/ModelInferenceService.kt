@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -40,6 +43,7 @@ class ModelInferenceService private constructor(
 
     private var llamaHelper: LlamaHelper? = null
     private var isModelLoaded = false
+    private val loadMutex = Mutex()
 
     companion object {
         @Volatile
@@ -55,61 +59,70 @@ class ModelInferenceService private constructor(
 
     suspend fun loadModel(modelPath: String = DEFAULT_MODEL_PATH): Result<Unit> = withContext(llamaDispatcher) {
         try {
-            if (isModelLoaded) {
-                Log.d(TAG, "Model already loaded")
-                return@withContext Result.success(Unit)
-            }
-
-            val modelFile = File(modelPath)
-            if (!modelFile.exists()) {
-                val error = ModelLoadException("Model file not found: $modelPath")
-                Log.e(TAG, error.message)
-                _state.value = ModelState.Error(error)
-                return@withContext Result.failure(error)
-            }
-
-            if (!modelFile.isFile) {
-                val error = ModelLoadException("Not a valid file: $modelPath")
-                Log.e(TAG, error.message)
-                _state.value = ModelState.Error(error)
-                return@withContext Result.failure(error)
-            }
-
-            if (!modelFile.canRead()) {
-                val error = ModelLoadException("Cannot read model file: $modelPath")
-                Log.e(TAG, error.message)
-                _state.value = ModelState.Error(error)
-                return@withContext Result.failure(error)
-            }
-
-            _state.value = ModelState.Loading
-            Log.d(TAG, "Loading model from: $modelPath")
-
-            llamaHelper = LlamaHelper(contentResolver, llamaScope, _llmEventFlow)
-
-            val modelUri = android.net.Uri.fromFile(modelFile).toString()
-            llamaHelper?.load(
-                path = modelUri,
-                contextLength = 2048,
-                threads = 4
-            ) { success ->
-                if (success) {
-                    Log.d(TAG, "Model loaded successfully")
-                } else {
-                    Log.e(TAG, "Model failed to load")
+            loadMutex.withLock {
+                if (isModelLoaded) {
+                    Log.d(TAG, "Model already loaded")
+                    return@withLock Result.success(Unit)
                 }
+
+                val modelFile = File(modelPath)
+                if (!modelFile.exists()) {
+                    val error = ModelLoadException("Model file not found: $modelPath")
+                    Log.e(TAG, error.message)
+                    _state.value = ModelState.Error(error)
+                    return@withLock Result.failure(error)
+                }
+
+                if (!modelFile.isFile) {
+                    val error = ModelLoadException("Not a valid file: $modelPath")
+                    Log.e(TAG, error.message)
+                    _state.value = ModelState.Error(error)
+                    return@withLock Result.failure(error)
+                }
+
+                if (!modelFile.canRead()) {
+                    val error = ModelLoadException("Cannot read model file: $modelPath")
+                    Log.e(TAG, error.message)
+                    _state.value = ModelState.Error(error)
+                    return@withLock Result.failure(error)
+                }
+
+                _state.value = ModelState.Loading
+                Log.d(TAG, "Loading model from: $modelPath")
+
+                llamaHelper = LlamaHelper(contentResolver, llamaScope, _llmEventFlow)
+
+                val modelUri = android.net.Uri.fromFile(modelFile).toString()
+                
+                val loadResult = CompletableDeferred<Result<Unit>>()
+                llamaHelper?.load(
+                    path = modelUri,
+                    contextLength = 2048,
+                    threads = 4
+                ) { success ->
+                    if (success) {
+                        Log.d(TAG, "Model loaded successfully")
+                        isModelLoaded = true
+                        _state.value = ModelState.Ready
+                        loadResult.complete(Result.success(Unit))
+                    } else {
+                        Log.e(TAG, "Model failed to load")
+                        isModelLoaded = false
+                        _state.value = ModelState.Error(ModelLoadException("Model failed to load"))
+                        loadResult.complete(Result.failure(ModelLoadException("Model failed to load")))
+                    }
+                }
+
+                loadResult.await()
             }
-
-            isModelLoaded = true
-            _state.value = ModelState.Ready
-
-            Result.success(Unit)
         } catch (e: OutOfMemoryError) {
+            isModelLoaded = false
             val error = ModelLoadException("OOM loading model. Try a smaller quantization.", e)
             Log.e(TAG, error.message, e)
             _state.value = ModelState.Error(error)
             Result.failure(error)
         } catch (e: Exception) {
+            isModelLoaded = false
             val error = ModelLoadException("Failed to load model: ${e.message}", e)
             Log.e(TAG, error.message, e)
             _state.value = ModelState.Error(error)
