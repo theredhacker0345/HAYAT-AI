@@ -3,7 +3,7 @@ package com.hayat.services
 import android.content.Context
 import android.util.Log
 import com.hayat.ui.screens.MedicalPromptBuilder
-import io.github.ljcamargo.llama.LlamaHelper
+import org.nehuatl.llamacpp.LlamaHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,7 +47,7 @@ class ModelInferenceService private constructor(
 
         fun getInstance(context: Context): ModelInferenceService =
             INSTANCE ?: synchronized(this) {
-                INSTANCE ?: ModelInferenceService(context, context.contentResolver).also { INSTANCE = it }
+                INSTANCE ?: ModelInferenceService(context, context.applicationContext.contentResolver).also { INSTANCE = it }
             }
 
         const val DEFAULT_MODEL_PATH = "/sdcard/Hayat/model.gguf"
@@ -95,13 +95,13 @@ class ModelInferenceService private constructor(
             ) { success ->
                 if (success) {
                     Log.d(TAG, "Model loaded successfully")
+                    isModelLoaded = true
+                    _state.value = ModelState.Ready
                 } else {
                     Log.e(TAG, "Model failed to load")
+                    _state.value = ModelState.Error(ModelLoadException("Model failed to load"))
                 }
             }
-
-            isModelLoaded = true
-            _state.value = ModelState.Ready
 
             Result.success(Unit)
         } catch (e: OutOfMemoryError) {

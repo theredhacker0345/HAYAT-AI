@@ -2,13 +2,16 @@ package com.hayat.data
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class MedicalDatabaseSeeder(private val context: Context) {
     private val TAG = "MedicalDatabaseSeeder"
+
+    private val seederScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val emergencyProtocols = listOf(
         MedicalChunk(
@@ -113,9 +116,8 @@ class MedicalDatabaseSeeder(private val context: Context) {
         )
     )
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun seedDatabaseIfNeeded() {
-        GlobalScope.launch(Dispatchers.IO) {
+        seederScope.launch {
             try {
                 val db = AppDatabase.getDatabase(context)
                 val dao = db.medicalChunkDao()
@@ -132,6 +134,8 @@ class MedicalDatabaseSeeder(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to seed database", e)
+            } finally {
+                seederScope.cancel()
             }
         }
     }
