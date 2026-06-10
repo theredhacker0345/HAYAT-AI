@@ -12,9 +12,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hayat.R
 import com.hayat.data.ChatMessage
 import com.hayat.data.ChatRole
 
@@ -30,7 +32,6 @@ fun ChatScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Conversation area
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -43,7 +44,6 @@ fun ChatScreen(
             }
         }
 
-        // Input field area
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -57,7 +57,7 @@ fun ChatScreen(
                     value = textState,
                     onValueChange = { textState = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("اكتب رسالة...") }, // Arabic for "Type a message..."
+                    placeholder = { Text(stringResource(R.string.label_chat_hint)) },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -75,15 +75,14 @@ fun ChatScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,
-                        contentDescription = "Send",
+                        contentDescription = stringResource(R.string.content_description_send),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            // Disclaimer
             Text(
-                text = "I am an offline medical assistant, ask me about injuries.",
+                text = stringResource(R.string.text_disclaimer),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray,
                 textAlign = TextAlign.Center,

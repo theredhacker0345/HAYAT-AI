@@ -9,10 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hayat.R
 
 @Composable
 fun ErrorScreen(missingPath: String) {
@@ -26,20 +28,20 @@ fun ErrorScreen(missingPath: String) {
     ) {
         Icon(
             imageVector = Icons.Default.Warning,
-            contentDescription = "Warning",
+            contentDescription = stringResource(R.string.content_description_warning),
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Missing Assets",
+            text = stringResource(R.string.title_missing_assets),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.error,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Please create the following folder and add the required files (model.gguf and medical.db):",
+            text = stringResource(R.string.message_missing_assets),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HAYAT AI</string>
+
+    <string name="title_settings">Settings</string>
+    <string name="label_model_path">Model Path (.gguf)</string>
+    <string name="label_db_path">Database Path (.db)</string>
+    <string name="button_save_settings">Save Settings</string>
+
+    <string name="title_missing_assets">Missing Assets</string>
+    <string name="message_missing_assets">Please create the following folder and add the required files (model.gguf and e5-small.onnx):</string>
+    <string name="content_description_warning">Warning</string>
+
+    <string name="label_chat_hint">Type a message…</string>
+    <string name="text_disclaimer">I am an offline medical assistant, ask me about injuries.</string>
+    <string name="chat_response_placeholder">Checking medical guidelines for: %1$s</string>
+    <string name="content_description_send">Send</string>
+    <string name="content_description_toggle_settings">Toggle Settings</string>
+
+    <string name="label_language">Language</string>
+    <string name="label_language_english">English</string>
+    <string name="label_language_arabic">Arabic</string>
+
+    <string name="chat_empty_suggestion_1">How to treat a burn</string>
+    <string name="chat_empty_suggestion_2">First aid for bleeding</string>
+    <string name="chat_empty_suggestion_3">Signs of dehydration</string>
+
+    <string name="chat_refusal">I couldn\'t find relevant medical guidelines for this query. Please consult a healthcare professional.</string>
+    <string name="disclaimer">This is AI-assisted guidance, not a substitute for professional medical advice.</string>
+    <string name="error_model_not_loaded">Model not loaded. Please check the model path in settings.</string>
+    <string name="error_database_missing">Medical database not found. Please place medical.db in the Hayat folder.</string>
+    <string name="error_embedding_model_missing">Embedding model not found. Please place e5-small.onnx in the Hayat folder.</string>
+</resources>
