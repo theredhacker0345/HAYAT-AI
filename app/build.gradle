@@ -1,12 +1,21 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'kotlin-kapt'
+    id 'com.google.devtools.ksp'
 }
 
 android {
     namespace 'com.hayat'
     compileSdk 34
+
+    signingConfigs {
+        create("release") {
+            storeFile file('release.jks')
+            storePassword 'android'
+            keyAlias 'android'
+            keyPassword 'android'
+        }
+    }
 
     defaultConfig {
         applicationId "com.hayat"
@@ -25,6 +34,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -60,7 +70,7 @@ dependencies {
     // Room Database
     implementation "androidx.room:room-runtime:2.6.1"
     implementation "androidx.room:room-ktx:2.6.1"
-    kapt "androidx.room:room-compiler:2.6.1"
+    ksp "androidx.room:room-compiler:2.6.1"
 
     // ONNX Runtime for Android
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.1'
