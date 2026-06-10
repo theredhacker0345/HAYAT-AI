@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HAYAT AI</string>
+
+    <string name="title_settings">الإعدادات</string>
+    <string name="label_model_path">مسار النموذج (‎.gguf)</string>
+    <string name="label_db_path">مسار قاعدة البيانات (‎.db)</string>
+    <string name="button_save_settings">حفظ الإعدادات</string>
+
+    <string name="title_missing_assets">ملفات مفقودة</string>
+    <string name="message_missing_assets">يرجى إنشاء المجلد التالي وإضافة الملفات المطلوبة (model.gguf و e5-small.onnx):</string>
+    <string name="content_description_warning">تحذير</string>
+
+    <string name="label_chat_hint">اكتب رسالة…</string>
+    <string name="text_disclaimer">أنا مساعد طبي غير متصل بالإنترنت، اسألني عن الإصابات.</string>
+    <string name="chat_response_placeholder">جاري التحقق من الإرشادات الطبية لـ: %1$s</string>
+    <string name="content_description_send">إرسال</string>
+    <string name="content_description_toggle_settings">فتح الإعدادات</string>
+
+    <string name="label_language">اللغة</string>
+    <string name="label_language_english">الإنجليزية</string>
+    <string name="label_language_arabic">العربية</string>
+
+    <string name="chat_empty_suggestion_1">كيفية علاج الحروق</string>
+    <string name="chat_empty_suggestion_2">الإسعافات الأولية للنزيف</string>
+    <string name="chat_empty_suggestion_3">علامات الجفاف</string>
+
+    <string name="chat_refusal">عذراً، لم أتمكن من العثور على بروتوكولات طبية ذات صلة للإجابة على طلبك بشكل موثوق.</string>
+    <string name="disclaimer">هذا توجيه بمساعدة الذكاء الاصطناعي، وليس بديلاً عن النصيحة الطبية المهنية.</string>
+    <string name="error_model_not_loaded">لم يتم تحميل النموذج. يرجى التحقق من مسار النموذج في الإعدادات.</string>
+    <string name="error_database_missing">لم يتم العثور على قاعدة البيانات الطبية. يرجى وضع medical.db في مجلد Hayat.</string>
+    <string name="error_embedding_model_missing">لم يتم العثور على نموذج التضمين. يرجى وضع e5-small.onnx في مجلد Hayat.</string>
+</resources>
