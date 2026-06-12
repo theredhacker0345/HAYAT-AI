@@ -1,136 +1,233 @@
 package com.hayat.services
 
-import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.File
-import java.util.*
+import java.io.InputStreamReader
 import kotlin.math.sqrt
 
-/**
- * EmbeddingService handles text normalization, tokenization, and inference
- * using the e5-small-v2 ONNX model for on-device vector generation.
- *
- * @param modelFile The ONNX model file, typically resolved from app-specific storage.
- */
-class EmbeddingService(private val modelFile: File) : AutoCloseable {
+class EmbeddingService(
+    private val context: Context,
+    private val modelFile: File
+) : AutoCloseable {
+
     private val TAG = "EmbeddingService"
+
+    private val MAX_SEQ_LENGTH = 128
+    private val EMBEDDING_DIM = 384
 
     private var ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
     private var ortSession: OrtSession? = null
+    private val vocab: Map<String, Int> by lazy { loadVocab() }
 
     init {
         loadModel()
+    }
+
+    private fun loadVocab(): Map<String, Int> {
+        return try {
+            val inputStream = context.assets.open("vocab.json")
+            val reader = BufferedReader(InputStreamReader(inputStream))
+            val json = JSONObject(reader.readText())
+            reader.close()
+            inputStream.close()
+
+            val map = mutableMapOf<String, Int>()
+            json.keys().forEach { key ->
+                map[key] = json.getInt(key)
+            }
+            map
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not load vocab.json from assets, using fallback. ${e.message}")
+            emptyMap()
+        }
     }
 
     private fun loadModel() {
         try {
             if (modelFile.exists()) {
                 val options = OrtSession.SessionOptions()
-                // Optimize for mobile execution
                 options.setIntraOpNumThreads(2)
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 ortSession = ortEnv.createSession(modelFile.absolutePath, options)
-                Log.d(TAG, "ONNX Model loaded successfully from ${modelFile.absolutePath}")
+                Log.d(TAG, "ONNX Model loaded from ${modelFile.absolutePath}")
             } else {
-                Log.e(TAG, "Model file not found at ${modelFile.absolutePath}")
+                Log.e(TAG, "Model file not found: ${modelFile.absolutePath}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading ONNX model: ${e.message}")
         }
     }
 
-    /**
-     * Preprocessing: Cleans user input by lowercasing and removing special characters.
-     */
     fun normalizeText(input: String): String {
-        return input.lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9\\s]"), "")
-            .trim()
+        return input.lowercase().replace(Regex("[^a-z0-9\\s]"), " ").trim()
     }
 
-    /**
-     * Simple Tokenizer: Prepares the input string for the model.
-     * Note: E5 models typically require a "query: " prefix for asymmetric retrieval.
-     */
-    private fun tokenize(text: String): LongArray {
-        // e5-small-v2 uses BERT-style tokenization (WordPiece).
-        // This is a simplified version for demonstration as per requirements.
-        val processedText = "query: " + normalizeText(text)
+    private fun tokenize(text: String): Pair<LongArray, LongArray> {
+        val e5Query = "query: $text"
 
-        // Dummy tokenization logic: converting chars to longs as a placeholder.
-        // A production app would use a proper WordPiece tokenizer with a vocab file.
-        return processedText.split(" ").flatMap { word ->
-            word.map { it.toLong() }
-        }.toLongArray()
-    }
+        val wordPieces = mutableListOf<Int>()
+        wordPieces.add(vocab["[CLS]"] ?: 101)
 
-    /**
-     * Generates an embedding vector for the given input string.
-     * Performs inference on a background thread with a 500ms timeout.
-     */
-    suspend fun generateEmbedding(input: String): FloatArray? = withContext(Dispatchers.Default) {
-        withTimeoutOrNull(500L) {
-            try {
-                val session = ortSession ?: run {
-                    Log.e(TAG, "Inference failed: ONNX Session is null")
-                    return@withTimeoutOrNull null
-                }
+        e5Query.split(" ").forEach { word ->
+            if (word.isEmpty()) return@forEach
 
-                val tokens = tokenize(input)
-                val shape = longArrayOf(1, tokens.size.toLong())
-
-                // Prepare input tensors
-                val inputTensor = OnnxTensor.createTensor(ortEnv, java.nio.LongBuffer.wrap(tokens), shape)
-                val attentionMask = LongArray(tokens.size) { 1L }
-                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv, java.nio.LongBuffer.wrap(attentionMask), shape)
-
-                val inputs = mapOf(
-                    "input_ids" to inputTensor,
-                    "attention_mask" to attentionMaskTensor
-                )
-
-                // Run inference
-                try {
-                    session.run(inputs).use { results ->
-                        if (results.size() == 0) return@use null
-
-                        val outputTensor = results.get(0).value
-
-                        // Handle potential nested output arrays depending on model export format
-                        val rawOutput = when (outputTensor) {
-                            is Array<*> -> {
-                                if (outputTensor.isNotEmpty() && outputTensor[0] is FloatArray) {
-                                    outputTensor[0] as FloatArray
-                                } else if (outputTensor.isNotEmpty() && outputTensor[0] is Array<*>) {
-                                    (outputTensor[0] as Array<*>)[0] as? FloatArray
-                                } else null
-                            }
-                            else -> null
-                        }
-
-                        rawOutput?.let { normalizeL2(it) }
-                    }
-                } finally {
-                    inputTensor.close()
-                    attentionMaskTensor.close()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Inference error: ${e.message}")
-                null
+            if (vocab.containsKey(word)) {
+                wordPieces.add(vocab[word]!!)
+            } else {
+                wordPieces.addAll(wordPieceTokenize(word))
             }
-        } ?: run {
-            Log.e(TAG, "Embedding generation timed out or failed. Fallingback to System Busy.")
+        }
+
+        wordPieces.add(vocab["[SEP]"] ?: 102)
+
+        val inputIds = wordPieces.toLongArray()
+        val attentionMask = LongArray(inputIds.size) { 1L }
+
+        val paddedInputIds = inputIds.copyOf(MAX_SEQ_LENGTH)
+        val paddedAttentionMask = attentionMask.copyOf(MAX_SEQ_LENGTH)
+
+        for (i in inputIds.size until MAX_SEQ_LENGTH) {
+            paddedInputIds[i] = vocab["[PAD]"]?.toLong() ?: 0L
+            paddedAttentionMask[i] = 0L
+        }
+
+        return Pair(paddedInputIds, paddedAttentionMask)
+    }
+
+    private fun wordPieceTokenize(word: String): List<Int> {
+        var remaining = word
+        val subTokens = mutableListOf<Int>()
+        var isBad = false
+
+        while (remaining.isNotEmpty()) {
+            var start = 0
+            var end = remaining.length
+            var matchedToken: String? = null
+
+            while (start < end) {
+                val substr = remaining.substring(start, end)
+                val tokenId: Int? = when {
+                    start > 0 && vocab.containsKey("##$substr") -> vocab["##$substr"]
+                    start == 0 && vocab.containsKey(substr) -> vocab[substr]
+                    else -> null
+                }
+
+                if (tokenId != null) {
+                    matchedToken = tokenId.toString()
+                    break
+                }
+                end -= 1
+            }
+
+            if (matchedToken == null) {
+                isBad = true
+                break
+            }
+
+            subTokens.add(matchedToken.toInt())
+            remaining = remaining.substring(end)
+        }
+
+        if (isBad) {
+            return listOf(vocab["[UNK]"] ?: 100)
+        }
+
+        return subTokens
+    }
+
+    suspend fun generateEmbedding(input: String): FloatArray? = withContext(Dispatchers.IO) {
+        val session = ortSession ?: run {
+            Log.e(TAG, "Inference failed: ONNX Session is null. Model not loaded.")
+            return@withContext null
+        }
+
+        try {
+            if (vocab.isEmpty() || vocab["[CLS]"] == null) {
+                Log.e(TAG, "Tokenizer not initialized: vocab.json not loaded.")
+                return@withContext null
+            }
+
+            val (inputIds, attentionMask) = tokenize(input)
+
+            if (inputIds.isEmpty()) {
+                Log.e(TAG, "Tokenization produced empty input.")
+                return@withContext null
+            }
+
+            val inputShape = longArrayOf(1, MAX_SEQ_LENGTH.toLong())
+            val tokenTypeShape = longArrayOf(1, MAX_SEQ_LENGTH.toLong())
+
+            val inputTensor = OnnxTensor.createTensor(
+                ortEnv,
+                java.nio.LongBuffer.wrap(inputIds),
+                inputShape
+            )
+
+            val attentionMaskTensor = OnnxTensor.createTensor(
+                ortEnv,
+                java.nio.LongBuffer.wrap(attentionMask),
+                inputShape
+            )
+
+            val tokenTypeIds = LongArray(MAX_SEQ_LENGTH) { 0L }
+            val tokenTypeTensor = OnnxTensor.createTensor(
+                ortEnv,
+                java.nio.LongBuffer.wrap(tokenTypeIds),
+                tokenTypeShape
+            )
+
+            val inputs = mapOf(
+                "input_ids" to inputTensor,
+                "attention_mask" to attentionMaskTensor,
+                "token_type_ids" to tokenTypeTensor
+            )
+
+            val result = session.run(inputs)
+
+            try {
+                if (result.size() == 0) {
+                    Log.e(TAG, "Model returned empty output.")
+                    return@withContext null
+                }
+
+                val outputTensor = result.get(0).value as? ai.onnxruntime.OrtValue
+                    ?: run {
+                        Log.e(TAG, "Unexpected output type: ${result.get(0).value?.javaClass}")
+                        return@withContext null
+                    }
+
+                val floatBuffer = outputTensor.floatBuffer
+                val embedding = FloatArray(EMBEDDING_DIM)
+                for (i in 0 until EMBEDDING_DIM) {
+                    embedding[i] = if (floatBuffer.hasRemaining()) floatBuffer.get() else 0f
+                }
+
+                if (embedding.any { it.isNaN() || it.isInfinite() }) {
+                    Log.e(TAG, "Embedding contains NaN or Infinity.")
+                    return@withContext null
+                }
+
+                return@withContext normalizeL2(embedding)
+            } finally {
+                result.close()
+                inputTensor.close()
+                attentionMaskTensor.close()
+                tokenTypeTensor.close()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Inference error: ${e.message}", e)
             null
         }
     }
 
-    /**
-     * Normalizes the FloatArray to unit length (L2 normalization) for accurate cosine similarity.
-     */
     private fun normalizeL2(vector: FloatArray): FloatArray {
         var sumSquared = 0.0
         for (value in vector) {
@@ -144,6 +241,10 @@ class EmbeddingService(private val modelFile: File) : AutoCloseable {
             vector
         }
     }
+
+    fun isModelLoaded(): Boolean = ortSession != null
+
+    fun isTokenizerReady(): Boolean = vocab.isNotEmpty() && vocab.containsKey("[CLS]")
 
     override fun close() {
         try {
