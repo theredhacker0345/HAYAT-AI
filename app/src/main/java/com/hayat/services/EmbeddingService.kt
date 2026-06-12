@@ -155,7 +155,8 @@ class EmbeddingService(
                 return@withContext null
             }
 
-            val (inputIds, attentionMask) = tokenize(input)
+            val normalizedInput = normalizeText(input)
+            val (inputIds, attentionMask) = tokenize(normalizedInput)
 
             if (inputIds.isEmpty()) {
                 Log.e(TAG, "Tokenization produced empty input.")
@@ -204,10 +205,22 @@ class EmbeddingService(
                         return@withContext null
                     }
 
+                val outputShape = outputTensor.info.shape
+                val expectedShape = longArrayOf(1, EMBEDDING_DIM.toLong())
+                if (outputShape.contentEquals(expectedShape).not()) {
+                    Log.e(TAG, "Unexpected output shape: ${outputShape.contentToString()}, expected: ${expectedShape.contentToString()}")
+                    return@withContext null
+                }
+
                 val floatBuffer = outputTensor.floatBuffer
+                if (floatBuffer.remaining() < EMBEDDING_DIM) {
+                    Log.e(TAG, "Output buffer too small: ${floatBuffer.remaining()}, expected: $EMBEDDING_DIM")
+                    return@withContext null
+                }
+
                 val embedding = FloatArray(EMBEDDING_DIM)
                 for (i in 0 until EMBEDDING_DIM) {
-                    embedding[i] = if (floatBuffer.hasRemaining()) floatBuffer.get() else 0f
+                    embedding[i] = floatBuffer.get()
                 }
 
                 if (embedding.any { it.isNaN() || it.isInfinite() }) {
