@@ -14,29 +14,39 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import com.hayat.data.ChatMessage
 import com.hayat.data.ChatRole
+import com.hayat.services.ModelInferenceService
 import com.hayat.ui.screens.ChatScreen
 import com.hayat.ui.screens.ErrorScreen
 import com.hayat.ui.screens.SettingsScreen
 import com.hayat.ui.theme.HayatTheme
 import java.io.File
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            HayatApp()
+            HayatApp(contentResolver = contentResolver)
         }
     }
 }
 
 @Composable
-fun HayatApp() {
+fun HayatApp(contentResolver: android.content.ContentResolver) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Chat) }
     var assetsMissing by remember { mutableStateOf(false) }
     val hayatFolder = File(Environment.getExternalStorageDirectory(), "Hayat")
+    val modelInferenceService = remember {
+        ModelInferenceService(contentResolver = contentResolver)
+    }
+
+    LaunchedEffect(Unit) {
+        modelInferenceService.loadModel()
+    }
 
     // Check for assets on startup
     LaunchedEffect(Unit) {
@@ -67,8 +77,20 @@ fun HayatApp() {
                             messages = messages,
                             onSendMessage = { text ->
                                 messages.add(ChatMessage(text, ChatRole.USER))
-                                // Placeholder for AI response
-                                messages.add(ChatMessage("Checking medical guidelines for: $text", ChatRole.ASSISTANT))
+                                messages.add(ChatMessage("Generating response...", ChatRole.ASSISTANT))
+                                lifecycleScope.launch {
+                                    modelInferenceService.generateResponse(text).collect { token ->
+                                        val assistantIndex = messages.indexOfLast { message ->
+                                            message.role == ChatRole.ASSISTANT && message.content.startsWith("Generating response...")
+                                        }
+                                        if (assistantIndex >= 0) {
+                                            val prefixRemoved = messages[assistantIndex].content.removePrefix("Generating response...")
+                                            messages[assistantIndex] = ChatMessage(prefixRemoved + token, ChatRole.ASSISTANT)
+                                        } else {
+                                            messages.add(ChatMessage(token, ChatRole.ASSISTANT))
+                                        }
+                                    }
+                                }
                             }
                         )
                         Screen.Settings -> SettingsScreen(
