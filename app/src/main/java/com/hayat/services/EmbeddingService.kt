@@ -1,147 +1,168 @@
 package com.hayat.services
 
-import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import java.util.*
+import java.nio.LongBuffer
 import kotlin.math.sqrt
 
-/**
- * EmbeddingService handles text normalization, tokenization, and inference
- * using the e5-small-v2 ONNX model for on-device vector generation.
- *
- * @param modelFile The ONNX model file, typically resolved from app-specific storage.
- */
-class EmbeddingService(private val modelFile: File) : AutoCloseable {
-    private val TAG = "EmbeddingService"
+class EmbeddingService(
+    private val modelFile: File = File(DEFAULT_MODEL_PATH),
+    private val tokenizer: WordPieceTokenizer = WordPieceTokenizer(),
+) : AutoCloseable {
+    constructor(context: Context) : this(
+        modelFile = File(DEFAULT_MODEL_PATH),
+        tokenizer = WordPieceTokenizer(context = context),
+    )
 
-    private var ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
+    constructor(context: Context, modelFile: File) : this(
+        modelFile = modelFile,
+        tokenizer = WordPieceTokenizer(context = context),
+    )
+
+    private val TAG = "EmbeddingService"
+    private val ortEnv: OrtEnvironment = OrtEnvironment.getEnvironment()
     private var ortSession: OrtSession? = null
 
     init {
         loadModel()
     }
 
-    private fun loadModel() {
-        try {
-            if (modelFile.exists()) {
-                val options = OrtSession.SessionOptions()
-                // Optimize for mobile execution
-                options.setIntraOpNumThreads(2)
-                ortSession = ortEnv.createSession(modelFile.absolutePath, options)
-                Log.d(TAG, "ONNX Model loaded successfully from ${modelFile.absolutePath}")
-            } else {
-                Log.e(TAG, "Model file not found at ${modelFile.absolutePath}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading ONNX model: ${e.message}")
+    suspend fun embed(text: String): List<Float> = withContext(Dispatchers.IO) {
+        runCatching {
+            embedUnsafe(text)
+        }.getOrElse { exception ->
+            Log.e(TAG, "Embedding generation failed: ${exception.message}")
+            emptyList()
         }
     }
 
-    /**
-     * Preprocessing: Cleans user input by lowercasing and removing special characters.
-     */
+    suspend fun generateEmbedding(input: String): FloatArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            embedUnsafe(input).toFloatArray()
+        }.getOrNull()
+    }
+
     fun normalizeText(input: String): String {
-        return input.lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9\\s]"), "")
+        return input
+            .lowercase()
+            .replace(NON_ALPHANUMERIC_REGEX, " ")
             .trim()
     }
 
-    /**
-     * Simple Tokenizer: Prepares the input string for the model.
-     * Note: E5 models typically require a "query: " prefix for asymmetric retrieval.
-     */
-    private fun tokenize(text: String): LongArray {
-        // e5-small-v2 uses BERT-style tokenization (WordPiece).
-        // This is a simplified version for demonstration as per requirements.
-        val processedText = "query: " + normalizeText(text)
+    private fun loadModel() {
+        if (ortSession != null) {
+            return
+        }
 
-        // Dummy tokenization logic: converting chars to longs as a placeholder.
-        // A production app would use a proper WordPiece tokenizer with a vocab file.
-        return processedText.split(" ").flatMap { word ->
-            word.map { it.toLong() }
-        }.toLongArray()
+        if (!modelFile.isFile) {
+            Log.e(TAG, "ONNX model not found at ${modelFile.absolutePath}")
+            return
+        }
+
+        val options = OrtSession.SessionOptions()
+        try {
+            options.setIntraOpNumThreads(2)
+            ortSession = ortEnv.createSession(modelFile.absolutePath, options)
+            Log.d(TAG, "ONNX Model loaded successfully from ${modelFile.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading ONNX model: ${e.message}")
+        } finally {
+            options.close()
+        }
     }
 
-    /**
-     * Generates an embedding vector for the given input string.
-     * Performs inference on a background thread with a 500ms timeout.
-     */
-    suspend fun generateEmbedding(input: String): FloatArray? = withContext(Dispatchers.Default) {
-        withTimeoutOrNull(500L) {
-            try {
-                val session = ortSession ?: run {
-                    Log.e(TAG, "Inference failed: ONNX Session is null")
-                    return@withTimeoutOrNull null
+    private fun embedUnsafe(text: String): List<Float> {
+        val session = ortSession ?: run {
+            Log.e(TAG, "Inference failed: ONNX Session is null")
+            return emptyList()
+        }
+
+        val inputIds = tokenizer.tokenize(text)
+        val shape = longArrayOf(1, inputIds.size.toLong())
+        val inputTensor = OnnxTensor.createTensor(
+            ortEnv,
+            LongBuffer.wrap(LongArray(inputIds.size) { index -> inputIds[index].toLong() }),
+            shape,
+        )
+        val attentionMask = LongArray(inputIds.size) { index ->
+            if (inputIds[index] == 0) 0L else 1L
+        }
+        val attentionMaskTensor = OnnxTensor.createTensor(
+            ortEnv,
+            LongBuffer.wrap(attentionMask),
+            shape,
+        )
+
+        try {
+            val inputs = mapOf(
+                "input_ids" to inputTensor,
+                "attention_mask" to attentionMaskTensor,
+            )
+
+            session.run(inputs).use { results ->
+                if (results.size() == 0) {
+                    throw IllegalStateException("ONNX model returned no outputs")
                 }
 
-                val tokens = tokenize(input)
-                val shape = longArrayOf(1, tokens.size.toLong())
-
-                // Prepare input tensors
-                val inputTensor = OnnxTensor.createTensor(ortEnv, java.nio.LongBuffer.wrap(tokens), shape)
-                val attentionMask = LongArray(tokens.size) { 1L }
-                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv, java.nio.LongBuffer.wrap(attentionMask), shape)
-
-                val inputs = mapOf(
-                    "input_ids" to inputTensor,
-                    "attention_mask" to attentionMaskTensor
-                )
-
-                // Run inference
-                try {
-                    session.run(inputs).use { results ->
-                        if (results.size() == 0) return@use null
-
-                        val outputTensor = results.get(0).value
-
-                        // Handle potential nested output arrays depending on model export format
-                        val rawOutput = when (outputTensor) {
-                            is Array<*> -> {
-                                if (outputTensor.isNotEmpty() && outputTensor[0] is FloatArray) {
-                                    outputTensor[0] as FloatArray
-                                } else if (outputTensor.isNotEmpty() && outputTensor[0] is Array<*>) {
-                                    (outputTensor[0] as Array<*>)[0] as? FloatArray
-                                } else null
-                            }
-                            else -> null
-                        }
-
-                        rawOutput?.let { normalizeL2(it) }
-                    }
-                } finally {
-                    inputTensor.close()
-                    attentionMaskTensor.close()
+                val embedding = extractClsEmbedding(results.get(0).value)
+                if (embedding.size != EMBEDDING_DIMENSION) {
+                    throw IllegalStateException(
+                        "Expected $EMBEDDING_DIMENSION-dimensional embedding but got ${embedding.size}",
+                    )
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Inference error: ${e.message}")
-                null
+
+                return normalizeL2(embedding).toList()
             }
-        } ?: run {
-            Log.e(TAG, "Embedding generation timed out or failed. Fallingback to System Busy.")
-            null
+        } finally {
+            inputTensor.close()
+            attentionMaskTensor.close()
         }
     }
 
-    /**
-     * Normalizes the FloatArray to unit length (L2 normalization) for accurate cosine similarity.
-     */
-    private fun normalizeL2(vector: FloatArray): FloatArray {
-        var sumSquared = 0.0
-        for (value in vector) {
-            sumSquared += value.toDouble() * value
+    private fun extractClsEmbedding(output: Any): FloatArray {
+        val firstTokenEmbedding = when (output) {
+            is FloatArray -> output
+            is Array<*> -> {
+                val firstBatch = output.firstOrNull()
+                    ?: throw IllegalStateException("ONNX output batch is empty")
+
+                when (firstBatch) {
+                    is FloatArray -> firstBatch
+                    is Array<*> -> {
+                        val firstToken = firstBatch.firstOrNull()
+                            ?: throw IllegalStateException("ONNX output token sequence is empty")
+
+                        when (firstToken) {
+                            is FloatArray -> firstToken
+                            else -> throw IllegalStateException("Unexpected ONNX output token type: ${firstToken::class.java.name}")
+                        }
+                    }
+                    else -> throw IllegalStateException("Unexpected ONNX output batch type: ${firstBatch::class.java.name}")
+                }
+            }
+            else -> throw IllegalStateException("Unexpected ONNX output type: ${output::class.java.name}")
         }
-        val magnitude = sqrt(sumSquared).toFloat()
+
+        return firstTokenEmbedding.copyOf()
+    }
+
+    private fun normalizeL2(vector: FloatArray): FloatArray {
+        val magnitude = sqrt(
+            vector.sumOf { value ->
+                value.toDouble() * value.toDouble()
+            },
+        ).toFloat()
 
         return if (magnitude > 1e-9f) {
-            FloatArray(vector.size) { i -> vector[i] / magnitude }
+            FloatArray(vector.size) { index -> vector[index] / magnitude }
         } else {
-            vector
+            FloatArray(vector.size)
         }
     }
 
@@ -152,5 +173,11 @@ class EmbeddingService(private val modelFile: File) : AutoCloseable {
         } catch (e: Exception) {
             Log.e(TAG, "Error closing ONNX resources: ${e.message}")
         }
+    }
+
+    companion object {
+        private const val DEFAULT_MODEL_PATH = "/sdcard/Hayat/e5-small.onnx"
+        private const val EMBEDDING_DIMENSION = 384
+        private val NON_ALPHANUMERIC_REGEX = Regex("[^a-z0-9\\s]")
     }
 }
