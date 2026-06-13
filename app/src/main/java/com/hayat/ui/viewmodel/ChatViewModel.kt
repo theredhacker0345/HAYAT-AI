@@ -66,7 +66,7 @@ class ChatViewModel(
                 }
 
                 if (embeddingModelFile.exists()) {
-                    embeddingService = EmbeddingService(embeddingModelFile)
+                    embeddingService = EmbeddingService(context, embeddingModelFile)
                 }
 
                 if (dbFile.exists()) {
@@ -98,11 +98,11 @@ class ChatViewModel(
     private suspend fun processMessageWithRAG(query: String) {
         _loadingMessage.value = "Generating embedding..."
 
-        var embedding: FloatArray? = null
-        try {
-            embedding = embeddingService?.embed(query)
+        val embedding = try {
+            embeddingService?.embed(query)
         } catch (e: Exception) {
             Log.e(TAG, "Embedding failed: ${e.message}")
+            null
         }
 
         if (embedding == null) {
