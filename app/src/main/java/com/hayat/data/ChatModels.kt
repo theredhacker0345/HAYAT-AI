@@ -6,5 +6,6 @@ enum class ChatRole {
 
 data class ChatMessage(
     val content: String,
-    val role: ChatRole
+    val role: ChatRole,
+    val source: String? = null
 )

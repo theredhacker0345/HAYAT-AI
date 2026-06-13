@@ -13,42 +13,35 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
-import com.hayat.data.ChatMessage
-import com.hayat.data.ChatRole
-import com.hayat.services.ModelInferenceService
 import com.hayat.ui.screens.ChatScreen
 import com.hayat.ui.screens.ErrorScreen
 import com.hayat.ui.screens.SettingsScreen
+import com.hayat.ui.viewmodel.ChatViewModel
 import com.hayat.ui.theme.HayatTheme
+import com.hayat.ui.viewmodel.ChatViewModelFactory
 import java.io.File
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            HayatApp(contentResolver = contentResolver)
+            HayatApp()
         }
     }
 }
 
 @Composable
-fun HayatApp(contentResolver: android.content.ContentResolver) {
+fun HayatApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Chat) }
     var assetsMissing by remember { mutableStateOf(false) }
     val hayatFolder = File(Environment.getExternalStorageDirectory(), "Hayat")
-    val modelInferenceService = remember {
-        ModelInferenceService(contentResolver = contentResolver)
-    }
+    val viewModel: ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = ChatViewModelFactory(LocalContext.current)
+    )
 
-    LaunchedEffect(Unit) {
-        modelInferenceService.loadModel()
-    }
-
-    // Check for assets on startup
     LaunchedEffect(Unit) {
         val modelFile = File(hayatFolder, "model.gguf")
         val embeddingModelFile = File(hayatFolder, "e5-small.onnx")
@@ -58,10 +51,6 @@ fun HayatApp(contentResolver: android.content.ContentResolver) {
             assetsMissing = true
         }
     }
-
-    val messages = remember { mutableStateListOf<ChatMessage>() }
-    var modelPath by remember { mutableStateOf(File(hayatFolder, "model.gguf").absolutePath) }
-    var dbPath by remember { mutableStateOf(File(hayatFolder, "medical.db").absolutePath) }
 
     HayatTheme {
         Surface(
@@ -73,38 +62,16 @@ fun HayatApp(contentResolver: android.content.ContentResolver) {
             } else {
                 Box {
                     when (currentScreen) {
-                        Screen.Chat -> ChatScreen(
-                            messages = messages,
-                            onSendMessage = { text ->
-                                messages.add(ChatMessage(text, ChatRole.USER))
-                                messages.add(ChatMessage("Generating response...", ChatRole.ASSISTANT))
-                                lifecycleScope.launch {
-                                    modelInferenceService.generateResponse(text).collect { token ->
-                                        val assistantIndex = messages.indexOfLast { message ->
-                                            message.role == ChatRole.ASSISTANT && message.content.startsWith("Generating response...")
-                                        }
-                                        if (assistantIndex >= 0) {
-                                            val prefixRemoved = messages[assistantIndex].content.removePrefix("Generating response...")
-                                            messages[assistantIndex] = ChatMessage(prefixRemoved + token, ChatRole.ASSISTANT)
-                                        } else {
-                                            messages.add(ChatMessage(token, ChatRole.ASSISTANT))
-                                        }
-                                    }
-                                }
-                            }
-                        )
+                        Screen.Chat -> ChatScreen(viewModel = viewModel)
                         Screen.Settings -> SettingsScreen(
-                            modelPath = modelPath,
-                            dbPath = dbPath,
+                            modelPath = viewModel.getModelPath(),
+                            dbPath = viewModel.getDbPath(),
                             onPathsChanged = { newModel, newDb ->
-                                modelPath = newModel
-                                dbPath = newDb
                                 currentScreen = Screen.Chat
                             }
                         )
                     }
 
-                    // Simple floating button to switch screens for demonstration
                     FloatingActionButton(
                         onClick = {
                             currentScreen = if (currentScreen == Screen.Chat) Screen.Settings else Screen.Chat

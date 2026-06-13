@@ -4,40 +4,37 @@ import kotlin.math.sqrt
 
 class VectorSearchEngine(private val dao: MedicalChunkDao) {
 
-    /**
-     * Performs a Cosine Similarity calculation between the queryEmbedding
-     * and all embedding arrays in the database.
-     */
-    suspend fun findRelevantChunks(queryEmbedding: FloatArray): List<MedicalChunk> {
+    suspend fun search(queryEmbedding: FloatArray, topK: Int = 5): List<SearchResult> {
         val allChunks = dao.getAllChunks()
         return allChunks
             .map { chunk ->
                 val score = calculateCosineSimilarity(queryEmbedding, chunk.embedding)
-                chunk to score
+                SearchResult(chunk, score)
             }
-            .filter { (_, score) ->
-                isResultValid(score)
+            .filter { result ->
+                isResultValid(result.score)
             }
-            .sortedByDescending { (_, score) ->
-                score
+            .sortedByDescending { result ->
+                result.score
             }
-            .map { (chunk, _) ->
-                chunk
-            }
+            .take(topK)
     }
 
-    /**
-     * Returns true only if score > 0.82.
-     */
+    suspend fun findRelevantChunks(queryEmbedding: FloatArray): List<MedicalChunk> {
+        return search(queryEmbedding).map { it.chunk }
+    }
+
+    data class SearchResult(
+        val chunk: MedicalChunk,
+        val similarity: Float
+    )
+
     fun isResultValid(score: Float): Boolean {
         return score > 0.82f
     }
 
-    /**
-     * Refusal message to be shown if no valid results are found.
-     */
     fun getRefusalMessage(): String {
-        return "I'm sorry, but I couldn't find any relevant medical protocols to answer your request reliably."
+        return "I couldn't find relevant medical guidelines. Please consult a healthcare professional."
     }
 
     private fun calculateCosineSimilarity(vectorA: FloatArray, vectorB: FloatArray): Float {

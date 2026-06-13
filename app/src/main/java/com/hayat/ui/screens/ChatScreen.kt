@@ -1,6 +1,7 @@
 package com.hayat.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,85 +13,113 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hayat.data.ChatMessage
 import com.hayat.data.ChatRole
+import com.hayat.ui.viewmodel.ChatViewModel
+import com.hayat.ui.theme.DarkGray
+import com.hayat.ui.theme.Gray
 
 @Composable
 fun ChatScreen(
-    messages: List<ChatMessage>,
-    onSendMessage: (String) -> Unit
+    viewModel: ChatViewModel = viewModel(factory = ChatViewModelFactory(LocalContext.current))
 ) {
+    val messages by remember { derivedStateOf { viewModel.messages } }
+    val isLoading by remember { derivedStateOf { viewModel.isLoading } }
+    val loadingMessage by remember { derivedStateOf { viewModel.loadingMessage } }
     var textState by remember { mutableStateOf("") }
 
-    Column(
+    LaunchedEffect(Unit) {
+        viewModel.initialize()
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Conversation area
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(messages) { message ->
-                ChatBubble(message)
-            }
-        }
-
-        // Input field area
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TextField(
-                    value = textState,
-                    onValueChange = { textState = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("اكتب رسالة...") }, // Arabic for "Type a message..."
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-                IconButton(
-                    onClick = {
-                        if (textState.isNotBlank()) {
-                            onSendMessage(textState)
-                            textState = ""
-                        }
+                if (messages.isEmpty() && !isLoading) {
+                    item {
+                        EmptyStatePromptSuggestions(
+                            onSuggestionClicked = { suggestion ->
+                                viewModel.sendMessage(suggestion)
+                            }
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Send",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                } else {
+                    items(messages) { message ->
+                        ChatBubble(message)
+                    }
+                }
+
+                if (isLoading) {
+                    item {
+                        LoadingIndicator(loadingMessage)
+                    }
                 }
             }
 
-            // Disclaimer
-            Text(
-                text = "I am an offline medical assistant, ask me about injuries.",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray,
-                textAlign = TextAlign.Center,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp)
-            )
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextField(
+                        value = textState,
+                        onValueChange = { textState = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("اكتب رسالة...") },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        enabled = !isLoading
+                    )
+                    IconButton(
+                        onClick = {
+                            if (textState.isNotBlank() && !isLoading) {
+                                viewModel.sendMessage(textState)
+                                textState = ""
+                            }
+                        },
+                        enabled = !isLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Send",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Text(
+                    text = "I am an offline medical assistant, ask me about injuries.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                )
+            }
         }
     }
 }
@@ -99,15 +128,13 @@ fun ChatScreen(
 fun ChatBubble(message: ChatMessage) {
     val isUser = message.role == ChatRole.USER
     val alignment = if (isUser) Alignment.End else Alignment.Start
-    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = alignment
     ) {
         Surface(
-            color = bubbleColor,
+            color = if (isUser) MaterialTheme.colorScheme.primary else DarkGray,
             shape = RoundedCornerShape(
                 topStart = 12.dp,
                 topEnd = 12.dp,
@@ -115,12 +142,112 @@ fun ChatBubble(message: ChatMessage) {
                 bottomEnd = if (isUser) 0.dp else 12.dp
             )
         ) {
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(12.dp),
-                color = textColor,
-                fontSize = 16.sp
-            )
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = message.content,
+                    color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    fontSize = 16.sp
+                )
+                if (!isUser && !message.source.isNullOrBlank()) {
+                    Text(
+                        text = "Source: ${message.source}",
+                        color = Color(0xFF66B366),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun LoadingIndicator(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            if (message.isNotBlank()) {
+                Text(
+                    text = message,
+                    color = Gray,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyStatePromptSuggestions(
+    onSuggestionClicked: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Medical Assistant",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "Ask me about injuries and medical protocols",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Gray,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        PromptSuggestion(
+            text = "What are the steps for treating a broken arm?",
+            onClick = { onSuggestionClicked("What are the steps for treating a broken arm?") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        PromptSuggestion(
+            text = "How to handle severe bleeding?",
+            onClick = { onSuggestionClicked("How to handle severe bleeding?") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        PromptSuggestion(
+            text = "First aid for burns",
+            onClick = { onSuggestionClicked("First aid for burns") }
+        )
+    }
+}
+
+@Composable
+fun PromptSuggestion(text: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = DarkGray
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(12.dp),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 14.sp
+        )
+    }
+}
+
+class ChatViewModelFactory(private val context: android.content.Context) :
+    androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return ChatViewModel(context) as T
     }
 }
