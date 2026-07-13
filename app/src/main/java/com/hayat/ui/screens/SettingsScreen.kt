@@ -12,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.hayat.R
 import com.hayat.ui.theme.DarkGray
 import com.hayat.ui.theme.Gray
 
@@ -26,18 +25,17 @@ fun SettingsScreen(
 ) {
     var modelPathState by remember { mutableStateOf(modelPath) }
     var dbPathState by remember { mutableStateOf(dbPath) }
-    var selectedLanguage by remember { mutableStateOf("en") }
     
     val menuItems = listOf(
         MenuItem(
             icon = Icons.Default.Share,
-            title = stringResource(R.string.share_app),
+            title = "Share Hayat AI",
             description = "Share app and medical assets via Bluetooth/WiFi",
             onClick = onNavigateToSharing
         ),
         MenuItem(
             icon = Icons.Default.Print,
-            title = stringResource(R.string.print_guides),
+            title = "Print Emergency Sheets",
             description = "Generate printable PDF cheat sheets",
             onClick = onNavigateToCheatSheets
         )
@@ -52,7 +50,7 @@ fun SettingsScreen(
     ) {
         item {
             Text(
-                text = stringResource(R.string.settings),
+                text = "Settings",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -76,7 +74,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = modelPathState,
                         onValueChange = { modelPathState = it },
-                        label = { Text(stringResource(R.string.model_path), color = Gray) },
+                        label = { Text("Model Path (.gguf)", color = Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -87,7 +85,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = dbPathState,
                         onValueChange = { dbPathState = it },
-                        label = { Text(stringResource(R.string.db_path), color = Gray) },
+                        label = { Text("Database Path (.db)", color = Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -101,47 +99,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.save_settings))
-                    }
-                }
-            }
-        }
-        
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = DarkGray)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.language),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedLanguage == "en",
-                            onClick = { selectedLanguage = "en" },
-                            label = { Text(stringResource(R.string.english)) },
-                            leadingIcon = if (selectedLanguage == "en") {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                            } else null
-                        )
-                        FilterChip(
-                            selected = selectedLanguage == "ar",
-                            onClick = { selectedLanguage = "ar" },
-                            label = { Text(stringResource(R.string.arabic)) },
-                            leadingIcon = if (selectedLanguage == "ar") {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                            } else null
-                        )
+                        Text("Save Settings")
                     }
                 }
             }
