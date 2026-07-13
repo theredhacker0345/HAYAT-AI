@@ -11,6 +11,9 @@ local.properties
 
 # Logs
 *.log
+*.tmp
+*.swp
+*.swo
 
 # Temp files
 *.tmp
