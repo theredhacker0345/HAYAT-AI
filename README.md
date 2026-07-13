@@ -32,7 +32,7 @@ Provide life-saving medical guidance in emergency situations when:
 
 ### Safety Features
 - **Triple-Check Validation**: All responses validated against medical database
-- **Clear Disclaimers**: Every response includes medical disclaimer
+- **Clear Disclaimers**: Every response includes a medical disclaimer
 - **Source Attribution**: Shows which protocol each answer comes from
 - **Refusal Messages**: Gracefully declines queries outside medical scope
 
