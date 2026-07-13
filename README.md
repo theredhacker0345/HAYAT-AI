@@ -1,109 +1,295 @@
-🚑 Hayat AI (حياة)
+# Hayat AI - Offline Medical Assistant
 
-"Providing life-saving medical guidance where there is no doctor."
+[![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com/)
+[![Language](https://img.shields.io/badge/Language-Kotlin-blue.svg)](https://kotlinlang.org/)
+[![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-purple.svg)](https://developer.android.com/jetpack/compose)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Hayat AI is an offline-first, mobile medical assistant designed for high-conflict and crisis zones like Gaza and Kashmir. It provides physician-validated emergency protocols (trauma, surgery, first aid) without requiring an internet connection.
+**Hayat** (Arabic for "Life") is an offline-first AI medical assistant designed for crisis zones, remote areas, and situations where internet connectivity and hospitals are unavailable. Built with privacy and accessibility in mind.
 
-🌟 Mission Statement
+## 🎯 Mission
 
-In crisis zones, hospitals are often destroyed and internet is cut off. Hayat AI aims to put the collective knowledge of the ICRC, WHO, and field surgeons into the pocket of every civilian, enabling them to stabilize injuries and save lives when professional help is unavailable.
+Provide life-saving medical guidance in emergency situations when:
+- Internet connectivity is unavailable or unreliable
+- Hospitals/clinics are inaccessible (conflict zones, natural disasters)
+- Professional medical help is not immediately available
+- Language barriers exist (supports English & Arabic)
 
-🛠️ Technical Architecture
+## ✨ Features
 
-1. The Brain (The Model)
+### Core Functionality
+- **Offline LLM Inference**: Runs locally on device using GGUF quantized models
+- **RAG-Powered Responses**: Retrieval-Augmented Generation prevents hallucinations by grounding answers in verified medical protocols
+- **Vector Search**: Semantic search through ICRC/WHO emergency guidelines
+- **Bilingual Support**: Full English and Arabic interface with RTL layout support
+- **Privacy-First**: No data leaves your device, no tracking, no analytics
 
-Base Model: Qwen2.5-1.5B-Medical-Finetuned
+### Distribution Features
+- **P2P Sharing**: Share app and medical assets via Bluetooth/WiFi Direct
+- **Printable Cheat Sheets**: Generate 1-page PDF emergency protocol summaries
+- **APK Export**: Bundle app with models for offline distribution
+- **Low-End Device Support**: Optimized for devices with limited RAM/storage
 
-Optimization: Compressed via ZipNN or GGUF quantization to ~800MB–1.1GB to ensure it runs on entry-level Android devices (e.g., Samsung A-series).
+### Safety Features
+- **Triple-Check Validation**: All responses validated against medical database
+- **Clear Disclaimers**: Every response includes medical disclaimer
+- **Source Attribution**: Shows which protocol each answer comes from
+- **Refusal Messages**: Gracefully declines queries outside medical scope
 
-Fine-Tuning: LoRA adaptation based on "Austerity Medicine" (medical care with limited supplies).
+## 📋 Requirements
 
-2. The Library (RAG System)
+### Minimum Specifications
+- Android 8.0 (API 26) or higher
+- 2GB RAM (3GB+ recommended)
+- 1.5GB free storage space
+- ARM64-v8a processor (ARMv7 supported with reduced performance)
 
-Sources: ICRC War Surgery Manuals, WHO Emergency Guidelines, and University-level Trauma Courses.
+### Required Model Files
+Place these files in `/sdcard/Hayat/`:
 
-Format: Retrieval-Augmented Generation (RAG) using a local vector database to ensure the AI never "hallucinates" and always cites a specific medical book.
+| File | Size | Description | Download Source |
+|------|------|-------------|-----------------|
+| `model.gguf` | ~600MB-1.1GB | Quantized medical LLM | [HuggingFace](https://huggingface.co/TheBloke/Medical-Llama-3-8B-GGUF) |
+| `e5-small.onnx` | ~67MB | Embedding model | [HuggingFace](https://huggingface.co/intfloat/multilingual-e5-small) |
+| `medical.db` | ~44KB | Emergency protocols DB | Bundled with app |
 
-3. The App (The Shell)
+**Recommended Models:**
+- **LLM**: `Medical-Llama-3-8B-GGUF` (Q4_K_M quantization) or `TinyLlama-1.1B-Chat-v1.0-GGUF` for low-end devices
+- **Embeddings**: `multilingual-e5-small` (ONNX format) for English/Arabic support
 
-Framework: Built on the PocketPal AI open-source engine.
+## 🚀 Setup Instructions
 
-Core Feature: 100% Offline functionality.
+### Option 1: Manual Setup (Recommended for Testing)
 
-Sharing: Integrated Peer-to-Peer (P2P) sharing via Bluetooth and WiFi Direct.
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/your-org/hayat-ai.git
+   cd hayat-ai
+   ```
 
-🩺 Medical Dataset Strategy (The "Awais-Ibtisam" Loop)
+2. **Download Model Files**
+   ```bash
+   # Create Hayat directory
+   mkdir -p /sdcard/Hayat
+   
+   # Download medical LLM (choose one based on device specs)
+   # For powerful devices (>4GB RAM):
+   wget https://huggingface.co/TheBloke/Medical-Llama-3-8B-GGUF/resolve/main/medical-llama-3-8b.Q4_K_M.gguf -O /sdcard/Hayat/model.gguf
+   
+   # For low-end devices (<3GB RAM):
+   wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf -O /sdcard/Hayat/model.gguf
+   
+   # Download embedding model
+   wget https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/onnx/model.onnx -O /sdcard/Hayat/e5-small.onnx
+   ```
 
-To ensure 100% safety, we do not trust raw AI translations. We use a Triple-Check Validation Loop:
+3. **Build and Install**
+   ```bash
+   ./gradlew assembleDebug
+   adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
 
+4. **Copy Bundled Assets** (if needed)
+   The app will prompt you to copy medical databases from bundled assets on first launch.
 
+### Option 2: Android Studio
 
-Selection: Dr. Awais selects high-priority English medical protocols (Bleeding, Blast Trauma, Burns).
+1. Open project in Android Studio
+2. Sync Gradle files
+3. Connect Android device or start emulator (min 2GB RAM)
+4. Run `app` configuration
 
-AI Drafting: ChatGPT/Claude drafts a "Simple Arabic" version for civilians.
+### Option 3: Pre-built APK (For NGOs/Field Workers)
 
-Physician Review: Dr. Awais and Ibtisam verify the translation by "Back-Translating" it to English to ensure no medical dosage or step was lost.
+Download pre-built APK with models included (coming soon):
+- Full version (~1.2GB): Includes high-quality medical LLM
+- Lite version (~700MB): Uses TinyLlama for low-end devices
 
-Final Approval: Only "Doctor-Approved" rows are added to the Master Dataset.
+## 🏥 Medical Content
 
-📡 Distribution Plan (Gaza/Kashmir)
+The app includes emergency protocols from:
 
-Since the Play Store is often inaccessible, Hayat AI will spread via:
+### English Protocols
+- Bleeding Control (Direct Pressure, Tourniquets, Wound Packing)
+- Burn Treatment (Thermal, Chemical, Electrical)
+- Fracture Stabilization (Splinting, Immobilization)
+- CPR & Basic Life Support
+- Dehydration Management (ORS Preparation)
+- Wound Care & Infection Prevention
+- Emergency Triage (START Protocol)
+- Shock Management
 
+### Arabic Protocols (بروتوكولات عربية)
+- التحكم في النزيف
+- علاج الحروق
+- العناية بالكسور
+- الإنعاش القلبي الرئوي
+- إدارة الجفاف
+- العناية بالجروح
+- الفرز الطبي في حالات الطوارئ
+- إدارة الصدمة
 
+All protocols sourced from:
+- International Committee of the Red Cross (ICRC)
+- World Health Organization (WHO) Emergency Guidelines
+- Médecins Sans Frontières (MSF) Field Manuals
 
-The Mesh Network: A built-in "Share App" button using Bluetooth/WiFi Direct to spread the APK from phone to phone.
+## 🏗️ Architecture
 
-NGO Partners: Initial "Seed" drops via humanitarian organizations and field hospitals.
+```
+app/
+├── src/main/java/com/hayat/
+│   ├── MainActivity.kt              # Main entry point
+│   ├── assets/
+│   │   └── AssetManager.kt          # Asset copying/validation
+│   ├── data/
+│   │   ├── AppDatabase.kt           # Room database setup
+│   │   ├── MedicalChunk.kt          # Database entities
+│   │   ├── VectorSearchEngine.kt    # Semantic search
+│   │   └── ChatModels.kt            # Chat data classes
+│   ├── services/
+│   │   ├── ModelInferenceService.kt # Llama.cpp integration
+│   │   ├── EmbeddingService.kt      # ONNX runtime
+│   │   ├── PeerSharingService.kt    # Bluetooth/WiFi Direct
+│   │   └── WordPieceTokenizer.kt    # Text tokenization
+│   ├── ui/
+│   │   ├── screens/
+│   │   │   ├── ChatScreen.kt        # Main chat interface
+│   │   │   ├── SettingsScreen.kt    # Configuration
+│   │   │   ├── SharingScreen.kt     # P2P sharing UI
+│   │   │   ├── CheatSheetScreen.kt  # PDF generation
+│   │   │   └── SetupScreen.kt       # First-run setup
+│   │   ├── theme/
+│   │   │   ├── Theme.kt             # Material 3 theme
+│   │   │   ├── Color.kt             # Color palette
+│   │   │   └── Type.kt              # Typography
+│   │   └── viewmodel/
+│   │       └── ChatViewModel.kt     # RAG pipeline logic
+│   └── utils/
+│       └── CheatSheetGenerator.kt   # PDF generation
+├── src/main/assets/
+│   ├── medical.db                   # English protocols
+│   ├── medical_arabic.db            # Arabic protocols
+│   └── vocab.json                   # Tokenizer vocabulary
+└── build.gradle.kts                 # App-level build config
+```
 
-Hard Copy Backup: A "Print-Ready" feature that generates 1-page Arabic emergency cheat sheets for physical distribution.
+## 🔧 Development
 
-📅 4-Week Project Roadmap
+### Building from Source
 
-Week 1: Data Acquisition & Foundation
+```bash
+# Clone repository
+git clone https://github.com/your-org/hayat-ai.git
+cd hayat-ai
 
-Dr. Awais: Finalize collection of English ICRC/WHO PDFs and University Emergency manuals.
+# Build debug APK
+./gradlew assembleDebug
 
-Ubaid: Set up the PocketPal dev environment and remove non-medical features.
+# Build release APK (requires signing key)
+./gradlew assembleRelease
+```
 
-Bazeem: Download and test the Qwen2.5-1.5B medical model for speed/latency.
+### Running Tests
 
-Week 2: The Translation & Fine-Tuning
+```bash
+# Unit tests
+./gradlew test
 
-Medical Team: Complete the first 50 "Critical Emergency" Q&A pairs in the Google Sheet (The Triple-Check Loop).
+# Instrumentation tests
+./gradlew connectedAndroidTest
 
-Dev Team: Integrate the RAG system so the AI can "read" the English manuals.
+# Code coverage
+./gradlew jacocoTestReport
+```
 
-Bazeem: Begin lightweight LoRA fine-tuning with the first batch of verified data.
+### Adding New Medical Protocols
 
-Week 3: Integration & UI/UX
+1. Add protocol text to `app/src/main/assets/protocols_en.txt` or `protocols_ar.txt`
+2. Run embedding generation script:
+   ```bash
+   python scripts/generate_embeddings.py --language en
+   ```
+3. Rebuild app to include updated database
 
-Ubaid: Build the Arabic UI and the "Share via Bluetooth" module.
+### Contributing
 
-Medical Team: Complete the remaining 50–100 scenarios (Dehydration, Childbirth, Infections).
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-Testing: Alpha testing on low-end Android devices to check battery heat and RAM usage.
+**Priority Areas:**
+- Additional language translations
+- More medical protocols (pediatric, obstetric, mental health)
+- Performance optimizations for low-end devices
+- Accessibility improvements
+- NGO partnership integrations
 
-Week 4: Deployment & Outreach
+## ⚠️ Medical Disclaimer
 
-Final Review: Dr. Awais signs off on the full medical library.
+**IMPORTANT**: This application is for educational and informational purposes only. It does NOT:
 
-Optimization: Final compression of the model to its smallest possible size.
+- Replace professional medical advice, diagnosis, or treatment
+- Provide guarantees of accuracy or completeness
+- Establish a doctor-patient relationship
+- Handle all possible medical scenarios
 
-Launch: Share the APK with initial NGO contacts for delivery to Gaza.
+**Always seek professional medical help when available.** In emergencies, contact local emergency services immediately.
 
-👥 The Team
+The developers and contributors are not liable for any adverse outcomes resulting from use of this application.
 
-Ubaid Ur Rehman: Project Lead & App Developer.
+## 📄 License
 
-Dr. Awais (MBBS): Chief Medical Officer (Dataset & Safety).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Bazeem: ML Engineer (Model Optimization & Fine-tuning).
+**Important**: Medical protocol content may have separate licensing restrictions. Always verify usage rights for ICRC/WHO/MSF content before redistribution.
 
-Ibtisam: Medical Reviewer & Quality Control.
+## 🤝 Partnerships
 
-⚠️ Medical Disclaimer
+We're actively seeking partnerships with:
+- Humanitarian organizations (ICRC, MSF, WHO)
+- Refugee camp administrators
+- Disaster response teams
+- Medical NGOs working in conflict zones
 
-Hayat AI is an emergency assistance tool for use when professional medical care is unavailable. It is intended to support, not replace, the judgment of healthcare professionals. All protocols are based on ICRC and WHO "Austerity Medicine" guidelines.
+Contact: team@hayat-ai.org (placeholder)
 
-"Whosoever saves a life, it is as if he has saved the whole of mankind." (5:32)
+## 🙏 Acknowledgments
+
+- **Llama.cpp** team for efficient GGUF inference
+- **Hugging Face** for open-source medical models
+- **ICRC/WHO/MSF** for open-access medical guidelines
+- **Android Jetpack Compose** team for modern UI toolkit
+- All contributors and supporters of this humanitarian project
+
+## 📊 Roadmap
+
+### v1.0 (Current)
+- ✅ Core RAG chat functionality
+- ✅ English/Arabic bilingual support
+- ✅ Medical protocol database
+- ✅ P2P sharing infrastructure
+- ✅ Printable cheat sheets
+
+### v1.1 (Planned)
+- [ ] French language support
+- [ ] Pediatric-specific protocols
+- [ ] Obstetric emergency guidelines
+- [ ] Mental health first aid
+- [ ] Voice input/output for hands-free use
+
+### v1.2 (Planned)
+- [ ] Offline map integration for nearest clinics
+- [ ] Symptom checker with decision trees
+- [ ] Medication dosage calculator
+- [ ] Multi-patient triage management
+- [ ] SMS-based query fallback
+
+### Future Considerations
+- iOS version
+- Wear OS support for smartwatches
+- Integration with portable diagnostic devices
+- Mesh networking for group deployments
+
+---
+
+**Built with ❤️ for humanity**  
+*Hayat AI - Saving lives through technology*

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">حياة</string>
+    <string name="welcome_title">مرحباً بك في حياة</string>
+    <string name="welcome_subtitle">مساعد طبي ذكي يعمل دون اتصال بالإنترنت</string>
+    <string name="start_chat">ابدأ المحادثة</string>
+    <string name="settings">الإعدادات</string>
+    <string name="about">عن التطبيق</string>
+    <string name="share_app">مشاركة التطبيق</string>
+    <string name="print_guides">طباعة الإرشادات</string>
+    <string name="model_status">حالة النموذج</string>
+    <string name="download_model">تنزيل النموذج الطبي</string>
+    <string name="downloading">جاري التنزيل...</string>
+    <string name="download_complete">اكتمل التنزيل</string>
+    <string name="download_failed">فشل التنزيل</string>
+    <string name="storage_warning">مساحة التخزين غير كافية</string>
+    <string name="language">اللغة</string>
+    <string name="arabic">العربية</string>
+    <string name="english">English</string>
+    <string name="emergency_protocols">بروتوكولات الطوارئ</string>
+    <string name="bleeding_control">التحكم في النزيف</string>
+    <string name="burn_treatment">علاج الحروق</string>
+    <string name="fracture_care">العناية بالكسور</string>
+    <string name="cpr_instructions">تعليمات الإنعاش القلبي الرئوي</string>
+    <string name="disclaimer_title">إخلاء مسؤولية طبي</string>
+    <string name="disclaimer_text">هذا التطبيق لأغراض تعليمية فقط ولا يحل محل الاستشارة الطبية المهنية. في حالة الطوارئ، اتصل بخدمات الطوارئ المحلية فوراً.</string>
+    <string name="i_agree">أوافق</string>
+    <string name="search_hint">اشرح الأعراض أو الإصابة...</string>
+    <string name="type_message">اكتب رسالتك هنا</string>
+    <string name="sending">جاري الإرسال...</string>
+    <string name="error_no_model">النموذج الطبي غير مثبت. يرجى تنزيله من الإعدادات.</string>
+    <string name="error_network">خطأ في الشبكة. تحقق من اتصالك.</string>
+    <string name="generating_pdf">جاري إنشاء PDF...</string>
+    <string name="pdf_ready">ملف PDF جاهز للمشاركة</string>
+    <string name="sharing_via">مشاركة عبر...</string>
+    <string name="no_apps_found">لم يتم العثور على تطبيقات للمشاركة</string>
+    <string name="version">الإصدار</string>
+    <string name="built_for">مصمم لمناطق الأزمات</string>
+    <string name="offline_first">يعمل دون اتصال</string>
+    <string name="privacy_focused">الخصوصية أولاً</string>
+</resources>

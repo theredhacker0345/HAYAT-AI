@@ -14,10 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hayat.R
 import com.hayat.data.ChatMessage
 import com.hayat.data.ChatRole
 import com.hayat.ui.viewmodel.ChatViewModel
@@ -84,7 +86,7 @@ fun ChatScreen(
                         value = textState,
                         onValueChange = { textState = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("اكتب رسالة...") },
+                        placeholder = { Text(stringResource(R.string.type_message)) },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surface,
                             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -111,7 +113,7 @@ fun ChatScreen(
                 }
 
                 Text(
-                    text = "I am an offline medical assistant, ask me about injuries.",
+                    text = stringResource(R.string.disclaimer),
                     style = MaterialTheme.typography.labelSmall,
                     color = Gray,
                     textAlign = TextAlign.Center,
@@ -197,12 +199,12 @@ fun EmptyStatePromptSuggestions(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Medical Assistant",
+            text = stringResource(R.string.medical_assistant),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Ask me about injuries and medical protocols",
+            text = stringResource(R.string.ask_about_injuries),
             style = MaterialTheme.typography.bodyMedium,
             color = Gray,
             modifier = Modifier.padding(top = 8.dp)
