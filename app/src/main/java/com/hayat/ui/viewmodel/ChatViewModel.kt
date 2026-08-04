@@ -1,5 +1,6 @@
 package com.hayat.ui.viewmodel
 
+import android.net.Uri
 import android.content.Context
 import android.os.Environment
 import android.util.Log
@@ -16,6 +17,8 @@ import com.hayat.data.VectorSearchEngine
 import com.hayat.services.EmbeddingService
 import com.hayat.services.ModelInferenceService
 import com.hayat.services.RagEngine
+import com.hayat.services.VisionInferenceService
+import com.hayat.services.ModelManager
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.io.File
@@ -38,9 +41,13 @@ class ChatViewModel(
 
     private var embeddingService: EmbeddingService? = null
     private var modelInferenceService: ModelInferenceService? = null
+    private var visionInferenceService: VisionInferenceService? = null
+    private var modelManager: ModelManager? = null
     private var vectorSearchEngine: VectorSearchEngine? = null
     private var ragEngine: RagEngine? = null
     private var database: AppDatabase? = null
+    
+    private val VISION_PROMPT = "Analyze this medical image carefully. Describe visible symptoms, injuries, or conditions. Then provide first-aid guidance based ONLY on WHO/ICRC protocols. If the image is unclear or shows something you cannot identify, say so clearly."
 
     private var currentSource: String? = null
     private val DISCLAIMER = "⚠️ This is AI-assisted guidance, not a substitute for professional medical advice."
@@ -85,10 +92,25 @@ class ChatViewModel(
                 val modelFile = File(hayatFolder, "model.gguf")
                 val embeddingModelFile = File(hayatFolder, "e5-small.onnx")
                 val dbFile = File(hayatFolder, "medical.db")
+                val visionModelFile = File(hayatFolder, "moondream2.gguf")
+                val mmprojFile = File(hayatFolder, "moondream2-mmproj.gguf")
 
+                // Initialize text inference service
                 if (modelFile.exists()) {
                     modelInferenceService = ModelInferenceService(context.contentResolver)
                     modelInferenceService?.loadModel()
+                }
+
+                // Initialize vision inference service
+                if (visionModelFile.exists() && mmprojFile.exists()) {
+                    visionInferenceService = VisionInferenceService(context.contentResolver)
+                    // Don't load vision model immediately - ModelManager will handle loading
+                }
+
+                // Initialize ModelManager for memory-efficient model swapping
+                if (modelInferenceService != null && visionInferenceService != null) {
+                    modelManager = ModelManager(modelInferenceService!!, visionInferenceService!!)
+                    Log.i(TAG, "ModelManager initialized for memory-efficient model swapping")
                 }
 
                 if (embeddingModelFile.exists()) {
@@ -220,10 +242,153 @@ class ChatViewModel(
         _messages.clear()
     }
 
+    /**
+     * Send an image for vision-based medical analysis.
+     * Uses Moondream 2 with strict 384x384 downscaling.
+     */
+    fun sendImageForAnalysis(imageUri: Uri) {
+        _messages.add(ChatMessage("📷 Image uploaded for analysis", ChatRole.USER))
+        _messages.add(ChatMessage("", ChatRole.ASSISTANT))
+        _isLoading.value = true
+        _loadingMessage.value = "Loading vision model and analyzing image..."
+
+        viewModelScope.launch {
+            processImageWithVision(imageUri)
+        }
+    }
+
+    private suspend fun processImageWithVision(imageUri: Uri) {
+        val visionService = visionInferenceService
+        
+        if (visionService == null) {
+            updateAssistantMessage("Vision model not available. Please add moondream2.gguf and moondream2-mmproj.gguf to /sdcard/Hayat/")
+            return
+        }
+
+        try {
+            // Use ModelManager to load vision model (will unload text model if needed)
+            val modelMgr = modelManager
+            if (modelMgr != null) {
+                _loadingMessage.value = "Switching to vision model..."
+                val loaded = modelMgr.loadVisionModel()
+                if (!loaded) {
+                    updateAssistantMessage("Failed to load vision model. Check that moondream2.gguf and moondream2-mmproj.gguf are in /sdcard/Hayat/")
+                    return
+                }
+            }
+
+            _loadingMessage.value = "Analyzing image (384x384 processing)..."
+            
+            // Generate response from image
+            val responseFlow = visionService.generateResponseFromImage(
+                imageUri = imageUri,
+                prompt = VISION_PROMPT
+            )
+            
+            var imageDescription = ""
+            responseFlow.collect { token ->
+                imageDescription += token
+                val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
+                if (lastIndex >= 0) {
+                    _messages[lastIndex] = ChatMessage(
+                        content = imageDescription,
+                        role = ChatRole.ASSISTANT
+                    )
+                }
+            }
+
+            // After vision analysis, switch back to text model and search RAG for protocols
+            if (modelMgr != null) {
+                _loadingMessage.value = "Searching medical protocols..."
+                modelMgr.loadTextModel()
+            }
+
+            // Now search RAG database for relevant protocols based on the image description
+            if (imageDescription.isNotBlank() && ragEngine != null && embeddingService != null) {
+                _loadingMessage.value = "Finding matching treatment protocols..."
+                
+                val result = ragEngine!!.processQuery(imageDescription) { text ->
+                    embeddingService!!.embedQuery(text)
+                }
+
+                when (result) {
+                    is RagEngine.RagResult.Success -> {
+                        val currentSource = result.sources.firstOrNull()
+                        Log.d(TAG, "RAG Success for image - Sources: ${result.sources}")
+                        
+                        _loadingMessage.value = "Generating protocol-based guidance..."
+                        
+                        // Construct a prompt combining image analysis with protocols
+                        val protocolPrompt = buildString {
+                            appendLine("Based on the following image analysis:")
+                            appendLine("\"$imageDescription\"")
+                            appendLine()
+                            appendLine("Relevant medical protocols found:")
+                            result.contextChunks.forEachIndexed { index, chunk ->
+                                appendLine("${index + 1}. [${chunk.source}] ${chunk.content}")
+                            }
+                            appendLine()
+                            appendLine("Provide clear first-aid instructions based ONLY on these protocols.")
+                        }
+                        
+                        val responseFlow = modelInferenceService?.generateResponse(protocolPrompt)
+                        
+                        if (responseFlow != null) {
+                            var finalResponse = ""
+                            responseFlow.collect { token ->
+                                finalResponse += token
+                                val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
+                                if (lastIndex >= 0) {
+                                    _messages[lastIndex] = ChatMessage(
+                                        content = finalResponse,
+                                        role = ChatRole.ASSISTANT,
+                                        source = currentSource
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    is RagEngine.RagResult.Refusal -> {
+                        Log.w(TAG, "RAG Refusal for image analysis")
+                        // Keep the vision model's image description but add a note
+                        val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
+                        if (lastIndex >= 0) {
+                            val existingContent = _messages[lastIndex].content
+                            _messages[lastIndex] = ChatMessage(
+                                content = "$existingContent\n\n⚠️ Note: No matching medical protocols found in database. The above is visual analysis only.",
+                                role = ChatRole.ASSISTANT
+                            )
+                        }
+                    }
+                    is RagEngine.RagResult.Error -> {
+                        Log.e(TAG, "RAG Error for image: ${result.message}")
+                        // Keep vision analysis but note the error
+                        val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
+                        if (lastIndex >= 0) {
+                            val existingContent = _messages[lastIndex].content
+                            _messages[lastIndex] = ChatMessage(
+                                content = "$existingContent\n\n⚠️ Could not retrieve medical protocols: ${result.message}",
+                                role = ChatRole.ASSISTANT
+                            )
+                        }
+                    }
+                }
+            }
+
+            finalizeAssistantMessage()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Vision processing failed: ${e.message}", e)
+            updateAssistantMessageWithError("Failed to analyze image: ${e.message}")
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         embeddingService?.close()
         modelInferenceService?.close()
+        visionInferenceService?.close()
+        modelManager?.close()
         Log.i(TAG, "ChatViewModel cleared")
     }
 }

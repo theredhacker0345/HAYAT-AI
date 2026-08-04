@@ -1,5 +1,8 @@
 package com.hayat.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +38,16 @@ fun ChatScreen(
     val isLoading by remember { derivedStateOf { viewModel.isLoading } }
     val loadingMessage by remember { derivedStateOf { viewModel.loadingMessage } }
     var textState by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    // Image picker launcher for vision analysis
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { imageUri ->
+            viewModel.sendImageForAnalysis(imageUri)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.initialize()
@@ -82,6 +96,22 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Camera button for image analysis
+                    IconButton(
+                        onClick = {
+                            if (!isLoading) {
+                                imagePickerLauncher.launch("image/*")
+                            }
+                        },
+                        enabled = !isLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = "Take photo for analysis",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+
                     TextField(
                         value = textState,
                         onValueChange = { textState = it },
