@@ -4,12 +4,18 @@ Generates sample medical protocols with embeddings for the Room database.
 
 This script creates a SQLite database with emergency medical protocols
 based on ICRC/WHO guidelines for offline use in crisis zones.
+
+IMPORTANT: This script uses the 'passage:' prefix for embedding generation
+to match the multilingual-e5-small model's requirements for RAG retrieval.
 """
 
 import sqlite3
 import json
 import struct
 from pathlib import Path
+
+# E5 model requires 'passage:' prefix for document chunks
+E5_PASSAGE_PREFIX = "passage: "
 
 # Sample medical protocols based on ICRC War Surgery and WHO Emergency Guidelines
 MEDICAL_PROTOCOLS = [
