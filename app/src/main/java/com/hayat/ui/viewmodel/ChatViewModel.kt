@@ -15,6 +15,7 @@ import com.hayat.data.MedicalChunk
 import com.hayat.data.VectorSearchEngine
 import com.hayat.services.EmbeddingService
 import com.hayat.services.ModelInferenceService
+import com.hayat.services.RagEngine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.io.File
@@ -38,6 +39,7 @@ class ChatViewModel(
     private var embeddingService: EmbeddingService? = null
     private var modelInferenceService: ModelInferenceService? = null
     private var vectorSearchEngine: VectorSearchEngine? = null
+    private var ragEngine: RagEngine? = null
     private var database: AppDatabase? = null
 
     private var currentSource: String? = null
@@ -97,7 +99,9 @@ class ChatViewModel(
                     database = AppDatabase.getDatabase(context)
                     val dao = database?.medicalChunkDao()
                     if (dao != null) {
-                        vectorSearchEngine = VectorSearchEngine(dao)
+                        vectorSearchEngine = VectorSearchEngine(dao, confidenceThreshold)
+                        ragEngine = RagEngine(vectorSearchEngine!!, confidenceThreshold)
+                        Log.i(TAG, "RAG Engine initialized with confidence threshold: $confidenceThreshold")
                     }
                 }
             } catch (e: Exception) {
@@ -120,70 +124,68 @@ class ChatViewModel(
     }
 
     private suspend fun processMessageWithRAG(query: String) {
-        _loadingMessage.value = "Generating embedding..."
-
-        // Use embedQuery() which automatically adds the required "query:" prefix
-        val embedding = try {
-            embeddingService?.embedQuery(query)
-        } catch (e: Exception) {
-            Log.e(TAG, "Embedding failed: ${e.message}")
-            null
-        }
-
-        if (embedding == null) {
-            updateAssistantMessage("Unable to generate embedding. Please ensure the embedding model is available.")
-            return
-        }
-
         _loadingMessage.value = "Searching medical guidelines..."
 
-        val searchResults = try {
-            vectorSearchEngine?.search(embedding, topK = 5) ?: emptyList()
-        } catch (e: Exception) {
-            Log.e(TAG, "Search failed: ${e.message}")
-            emptyList()
-        }
-
-        val topResult = searchResults.firstOrNull()
-        val contextFromChunk = topResult?.chunk
-        val similarity = topResult?.similarity
-
-        Log.d(TAG, "Top match: title=${contextFromChunk?.protocol_title}, similarity=$similarity, threshold=$confidenceThreshold")
-
-        if (contextFromChunk == null || similarity == null) {
-            updateAssistantMessage(vectorSearchEngine?.getRefusalMessage() ?: "I couldn't find relevant medical guidelines. Please consult a healthcare professional.")
+        // Use the new RagEngine for safer, more constrained responses
+        val ragEngineInstance = ragEngine
+        val embeddingServiceInstance = embeddingService
+        
+        if (ragEngineInstance == null || embeddingServiceInstance == null) {
+            updateAssistantMessage("RAG system not initialized. Please ensure all model files are available.")
             return
         }
 
-        currentSource = contextFromChunk.protocol_title
-
-        _loadingMessage.value = "Generating response..."
-
-        val prompt = buildPrompt(contextFromChunk, query)
-        Log.d(TAG, "RAG Prompt constructed with context from: $currentSource")
-
-        val responseFlow = modelInferenceService?.generateResponse(prompt)
-
-        if (responseFlow == null) {
-            updateAssistantMessage("Model not available. Please place model.gguf in /sdcard/Hayat/")
-            return
+        // Process through RAG engine with E5 prefix handling
+        val result = ragEngineInstance.processQuery(query) { text ->
+            embeddingServiceInstance.embedQuery(text)
         }
 
-        try {
-            responseFlow.collect { token ->
-                val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
-                if (lastIndex >= 0) {
-                    val currentContent = _messages[lastIndex].content
-                    _messages[lastIndex] = ChatMessage(currentContent + token, ChatRole.ASSISTANT, currentSource)
+        when (result) {
+            is RagEngine.RagResult.Success -> {
+                currentSource = result.sources.firstOrNull()
+                Log.d(TAG, "RAG Success - Sources: ${result.sources}, Max Similarity: ${result.maxSimilarity}")
+                
+                _loadingMessage.value = "Generating response from protocols..."
+                
+                // Send the safely-constructed prompt to the LLM
+                val responseFlow = modelInferenceService?.generateResponse(result.prompt)
+                
+                if (responseFlow == null) {
+                    updateAssistantMessage("Model not available. Please place model.gguf in /sdcard/Hayat/")
+                    return
                 }
+                
+                try {
+                    responseFlow.collect { token ->
+                        val lastIndex = _messages.indexOfLast { it.role == ChatRole.ASSISTANT }
+                        if (lastIndex >= 0) {
+                            val currentContent = _messages[lastIndex].content
+                            _messages[lastIndex] = ChatMessage(
+                                content = currentContent + token,
+                                role = ChatRole.ASSISTANT,
+                                source = currentSource
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Generation failed: ${e.message}")
+                    updateAssistantMessageWithError("Failed to generate response. Please try again.")
+                    return
+                }
+                
+                finalizeAssistantMessage()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Generation failed: ${e.message}")
-            updateAssistantMessageWithError("Failed to generate response. Please try again.")
-            return
+            
+            is RagEngine.RagResult.Refusal -> {
+                Log.w(TAG, "RAG Refusal - Confidence too low")
+                updateAssistantMessage(result.message)
+            }
+            
+            is RagEngine.RagResult.Error -> {
+                Log.e(TAG, "RAG Error - ${result.message}")
+                updateAssistantMessage(result.message)
+            }
         }
-
-        finalizeAssistantMessage()
     }
 
     private fun finalizeAssistantMessage() {
@@ -214,16 +216,6 @@ class ChatViewModel(
         _loadingMessage.value = ""
     }
 
-    private fun buildPrompt(contextChunk: MedicalChunk, query: String): String {
-        return """Based on the medical protocol context below, answer the user's question:
-
-Context: ${contextChunk.protocol_title}: ${contextChunk.content}
-
-Question: $query
-
-Answer:"""
-    }
-
     fun clearMessages() {
         _messages.clear()
     }
@@ -232,5 +224,6 @@ Answer:"""
         super.onCleared()
         embeddingService?.close()
         modelInferenceService?.close()
+        Log.i(TAG, "ChatViewModel cleared")
     }
 }
