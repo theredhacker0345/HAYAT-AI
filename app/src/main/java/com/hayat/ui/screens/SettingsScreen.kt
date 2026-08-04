@@ -21,10 +21,13 @@ fun SettingsScreen(
     dbPath: String,
     onPathsChanged: (String, String) -> Unit,
     onNavigateToSharing: () -> Unit = {},
-    onNavigateToCheatSheets: () -> Unit = {}
+    onNavigateToCheatSheets: () -> Unit = {},
+    confidenceThreshold: Float = 0.65f,
+    onConfidenceThresholdChanged: (Float) -> Unit = {}
 ) {
     var modelPathState by remember { mutableStateOf(modelPath) }
     var dbPathState by remember { mutableStateOf(dbPath) }
+    var sliderPosition by remember { mutableStateOf(confidenceThreshold) }
     
     val menuItems = listOf(
         MenuItem(
@@ -100,6 +103,102 @@ fun SettingsScreen(
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Save Settings")
+                    }
+                }
+            }
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = DarkGray)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "RAG Confidence Threshold",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = String.format("%.2f", sliderPosition),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    Text(
+                        text = "Controls how strict the AI is when matching your questions to medical guidelines. Lower values give more answers but may be less accurate.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray
+                    )
+                    
+                    Slider(
+                        value = sliderPosition,
+                        onValueChange = { newValue ->
+                            sliderPosition = newValue
+                            onConfidenceThresholdChanged(newValue)
+                        },
+                        valueRange = 0.3f..0.9f,
+                        steps = 11,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "More Lenient",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Gray
+                        )
+                        Text(
+                            text = "More Strict",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Gray
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(0.5f, 0.65f, 0.8f).forEach { preset ->
+                            AssistChip(
+                                onClick = {
+                                    sliderPosition = preset
+                                    onConfidenceThresholdChanged(preset)
+                                },
+                                label = { Text(String.format("%.2f", preset)) },
+                                leadingIcon = {
+                                    if (Math.abs(sliderPosition - preset) < 0.01f) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = if (Math.abs(sliderPosition - preset) < 0.01f) 
+                                        MaterialTheme.colorScheme.primaryContainer 
+                                    else DarkGray
+                                )
+                            )
+                        }
                     }
                 }
             }

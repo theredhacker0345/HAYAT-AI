@@ -50,7 +50,25 @@ class EmbeddingService(
         }
     }
 
-    suspend fun embed(text: String): FloatArray? = withContext(Dispatchers.Default) {
+    /**
+     * Generate embedding for a search query.
+     * Automatically adds the required 'query:' prefix for E5 model compatibility.
+     * 
+     * @param text The user's search query
+     * @return L2-normalized embedding vector, or null if generation fails
+     */
+    suspend fun embedQuery(text: String): FloatArray? = embed(text, isQuery = true)
+    
+    /**
+     * Generate embedding for a document/passage.
+     * Automatically adds the required 'passage:' prefix for E5 model compatibility.
+     * 
+     * @param text The document text to embed
+     * @return L2-normalized embedding vector, or null if generation fails
+     */
+    suspend fun embedPassage(text: String): FloatArray? = embed(text, isQuery = false)
+
+    suspend fun embed(text: String, isQuery: Boolean = true): FloatArray? = withContext(Dispatchers.Default) {
         withTimeoutOrNull(5000L) {
             var inputTensor: OnnxTensor? = null
             var attentionMaskTensor: OnnxTensor? = null
@@ -65,7 +83,13 @@ class EmbeddingService(
                     return@withTimeoutOrNull null
                 }
 
-                val processedText = "query: " + normalizeText(text)
+                // E5 model requires specific prefixes:
+                // - "query:" for search queries
+                // - "passage:" for documents/chunks
+                val prefix = if (isQuery) E5_QUERY_PREFIX else E5_PASSAGE_PREFIX
+                val processedText = prefix + normalizeText(text)
+                Log.d(TAG, "Embedding with prefix: '${if (isQuery) "query:" else "passage:"}' + [${text.take(50)}...]")
+                
                 val inputIds = tokenizerInstance.tokenize(processedText, maxLength = 128)
 
                 val inputIdsLong = LongArray(inputIds.size) { i -> inputIds[i].toLong() }
@@ -114,6 +138,12 @@ class EmbeddingService(
             Log.e(TAG, "Embedding generation timed out.")
             null
         }
+    }
+
+    companion object {
+        // E5 model prefixes - MUST match between embedding generation and inference
+        private const val E5_QUERY_PREFIX = "query: "
+        private const val E5_PASSAGE_PREFIX = "passage: "
     }
 
     private fun extractFloatArray(outputTensor: Array<*>): FloatArray? {

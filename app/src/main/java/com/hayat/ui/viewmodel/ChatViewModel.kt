@@ -44,11 +44,35 @@ class ChatViewModel(
     private val DISCLAIMER = "⚠️ This is AI-assisted guidance, not a substitute for professional medical advice."
     private var modelPath: String = ""
     private var dbPath: String = ""
+    
+    // Configurable confidence threshold for RAG retrieval
+    // Can be adjusted during red-teaming to balance precision vs. recall
+    private var confidenceThreshold: Float = VectorSearchEngine.DEFAULT_CONFIDENCE_THRESHOLD
 
     init {
         modelPath = File(hayatFolder, "model.gguf").absolutePath
         dbPath = File(hayatFolder, "medical.db").absolutePath
     }
+    
+    /**
+     * Update the RAG confidence threshold at runtime.
+     * Lower values (e.g., 0.5) return more results but may include less relevant matches.
+     * Higher values (e.g., 0.8) are more strict but may miss relevant guidelines.
+     * 
+     * @param threshold Confidence threshold between 0.0 and 1.0
+     */
+    fun setConfidenceThreshold(threshold: Float) {
+        require(threshold in 0.0f..1.0f) { "Confidence threshold must be between 0.0 and 1.0" }
+        confidenceThreshold = threshold
+        Log.i(TAG, "Confidence threshold updated to: $threshold")
+        
+        // Reinitialize vector search engine with new threshold
+        database?.medicalChunkDao()?.let { dao ->
+            vectorSearchEngine = VectorSearchEngine(dao, confidenceThreshold)
+        }
+    }
+    
+    fun getConfidenceThreshold(): Float = confidenceThreshold
 
     fun getModelPath(): String = modelPath
     fun getDbPath(): String = dbPath
@@ -98,8 +122,9 @@ class ChatViewModel(
     private suspend fun processMessageWithRAG(query: String) {
         _loadingMessage.value = "Generating embedding..."
 
+        // Use embedQuery() which automatically adds the required "query:" prefix
         val embedding = try {
-            embeddingService?.embed(query)
+            embeddingService?.embedQuery(query)
         } catch (e: Exception) {
             Log.e(TAG, "Embedding failed: ${e.message}")
             null
@@ -123,6 +148,8 @@ class ChatViewModel(
         val contextFromChunk = topResult?.chunk
         val similarity = topResult?.similarity
 
+        Log.d(TAG, "Top match: title=${contextFromChunk?.protocol_title}, similarity=$similarity, threshold=$confidenceThreshold")
+
         if (contextFromChunk == null || similarity == null) {
             updateAssistantMessage(vectorSearchEngine?.getRefusalMessage() ?: "I couldn't find relevant medical guidelines. Please consult a healthcare professional.")
             return
@@ -133,6 +160,7 @@ class ChatViewModel(
         _loadingMessage.value = "Generating response..."
 
         val prompt = buildPrompt(contextFromChunk, query)
+        Log.d(TAG, "RAG Prompt constructed with context from: $currentSource")
 
         val responseFlow = modelInferenceService?.generateResponse(prompt)
 
